@@ -14,7 +14,7 @@ function renderHero() {
   const busy = office.agents.filter(isBusy);
   $("#greeting").textContent = `${greeting()} · ${t("hero.count", { n: office.agents.length })}`;
   const live = flows?.activeCount || 0;
-  $("#hero-title").innerHTML = live ? t("hero.live", { n: `<em>${live}</em>` }) : busy.length ? esc(t("hero.busy", { n: busy.length })) : esc(t("hero.idle"));
+  $("#hero-title").innerHTML = live ? t(live === 1 ? "hero.liveOne" : "hero.live", { n: `<em>${live}</em>` }) : busy.length ? esc(t("hero.busy", { n: busy.length })) : esc(t("hero.idle"));
   $("#tiles").innerHTML = [
     [flows?.flowCount ?? "—", t("tile.flows", { window: windowLabel(S.hours) })],
     [flows?.handoffCount ?? "—", t("tile.handoffs")],

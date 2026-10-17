@@ -99,7 +99,7 @@ function studioPositions(base = false) {
   for (const agent of S.office.agents) {
     if (map.has(agent.id)) continue;
     const desk = desks.get(agent.id);
-    map.set(agent.id, { x: desk.x, y: desk.y + 4, mode: desk.room ? "desk" : "hall" });
+    map.set(agent.id, { x: desk.x, y: desk.y + 4, mode: desk.room ? "desk" : "frontdesk" });
   }
   map.set("you", { x: 112, y: ST.FEET, mode: "hall" });
   map.set("automation", { x: 250, y: ST.FEET, mode: "hall" });
@@ -229,7 +229,8 @@ function renderStudio() {
     node.querySelector(".creature").classList.remove("st-idle", "st-writing", "st-researching", "st-executing", "st-syncing", "st-error");
     node.querySelector(".creature").classList.add(`st-${agent ? agent.state : "idle"}`);
     node.querySelector(".creature").classList.toggle("sleepy", Boolean(agent && !isBusy(agent) && Date.now() - agent.lastActivityAt > 2 * 3600e3));
-    node.classList.toggle("away", pos.mode === "lounge" || pos.mode === "visit");
+    // A visiting bot hides its name tag (its speech bubble says who it is), so tags never pile up.
+    node.classList.toggle("away", pos.mode === "lounge");
     node.classList.toggle("hall", pos.mode === "hall");
     node.classList.toggle("faded", Boolean((cast && !cast.has(id)) || (neighbours && !neighbours.has(id))));
     const level = kindOf(id) === "agent" ? levelOf(id) : null;
