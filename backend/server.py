@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Grok Collab Room server. Local only: binds to 127.0.0.1 and refuses foreign Host/Origin.
+"""Bot Office server. Local only: binds to 127.0.0.1 and refuses foreign Host/Origin.
 
     python3 backend/server.py            # http://127.0.0.1:19200
     python3 backend/server.py --demo     # always show the demo team
@@ -65,7 +65,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path.startswith("/api/"):
             if not self._local():
-                self._json({"error": "请从本机打开协作室。"}, status=403)
+                self._json({"error": "请从本机打开Bot协作室。"}, status=403)
                 return
             if path == "/api/office":
                 self._json(office_view())
@@ -134,8 +134,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     if sys.version_info < (3, 9):
-        sys.exit("Grok Collab Room needs Python 3.9 or newer.")
-    parser = argparse.ArgumentParser(description="Grok Collab Room — a local office view of your Grok Bot team.")
+        sys.exit("Bot Office needs Python 3.9 or newer.")
+    parser = argparse.ArgumentParser(description="Bot Office — a local office view of your Grok Bot team.")
     parser.add_argument("--port", type=int, default=int(os.environ.get("GROK_COLLAB_PORT", PORT)), help=f"port to listen on (default {PORT})")
     parser.add_argument("--demo", action="store_true", help="always show the built-in demo team")
     parser.add_argument("--open", action="store_true", help="open the page in your browser")
@@ -149,7 +149,7 @@ def main() -> None:
             sys.exit(f"Port {args.port} is already in use. Is the room already open? Try --port {args.port + 1}.")
         raise
     url = f"http://{HOST}:{args.port}"
-    print(f"Grok Collab Room {VERSION}  {url}{'  (demo)' if args.demo else ''}", flush=True)
+    print(f"Bot Office {VERSION}  {url}{'  (demo)' if args.demo else ''}", flush=True)
     print("Press Ctrl+C to stop.", flush=True)
     if args.open:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()

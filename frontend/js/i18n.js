@@ -2,14 +2,14 @@
 // To add a language: copy the `en` block, translate the values, and add it to the language picker.
 const I18N = {
   zh: {
-    "app.title": "Grok 协作室",
+    "app.title": "Bot协作室",
     "app.tagline": "实时看你的 bot 团队怎么分工、交接、互相帮忙",
     "lang.switch": "EN",
     "loading": "正在读取…",
     "window.24": "24 小时", "window.168": "7 天", "window.720": "30 天",
     "aria.window": "时间范围", "aria.lang": "切换语言", "aria.theme": "切换深浅色", "aria.settings": "设置",
     "aria.stage": "协作舞台", "aria.views": "视图", "aria.side": "右侧面板", "aria.filter": "筛选流程", "aria.close": "关闭",
-    "pill.demo": "演示数据", "pill.online": "Grok Bot 在线", "pill.offline": "Grok Bot 没开 · 显示上次状态", "pill.error": "协作室后台没响应",
+    "pill.demo": "演示数据", "pill.online": "Grok Bot 在线", "pill.offline": "Grok Bot 没开 · 显示上次状态", "pill.error": "Bot协作室后台没响应",
     "banner.demo": "正在显示演示数据。", "banner.demoAuto": "没找到本机的 Grok Bot 数据，先用演示团队给你看看效果。", "banner.privacy": "隐私模式已开：所有消息内容都被隐藏。", "banner.settings": "去设置 →",
     "foot.updated": "只读本机数据 · {time} 更新", "foot.settings": "设置",
     "time.now": "刚刚", "time.minutes": "{n} 分钟前", "time.hours": "{n} 小时前", "time.days": "{n} 天前", "time.today": "今天", "time.yesterday": "昨天",
@@ -76,23 +76,23 @@ const I18N = {
     "profile.outputs": "{n} 条产出", "profile.peak": "最常在 {h} 点干活", "profile.replies": "回复你", "profile.out": "交出去的活", "profile.in": "接过的棒", "profile.chars": "写下的字", "profile.speed": "回你一般要", "profile.autos": "定时任务",
     "profile.notInOffice": "不在办公室", "profile.days": "入职第 {n} 天", "profile.last": "最近动静 {when}", "profile.toNext": "还差 {n} 经验", "profile.customize": "换个造型",
     "profile.more": "展开介绍", "profile.less": "收起", "profile.hours": "一天里什么时候最忙", "profile.twoWeeks": "最近两周", "profile.partners": "常搭档", "profile.autosTitle": "定时任务", "profile.flows": "这段时间参与的协作",
-    "settings.title": "协作室设置", "settings.tagline": "所有设置只保存在这台电脑上", "settings.back": "← 回到协作室", "settings.saved": "已保存", "settings.saveFailed": "保存失败",
+    "settings.title": "Bot协作室设置", "settings.tagline": "所有设置只保存在这台电脑上", "settings.back": "← 回到 Bot协作室", "settings.saved": "已保存", "settings.saveFailed": "保存失败",
     "set.general": "通用", "set.privacy": "隐私", "set.data": "数据来源", "set.rooms": "房间", "set.bots": "成员与造型", "set.about": "关于",
-    "set.language": "语言", "set.theme": "外观", "set.hours": "默认时间范围", "set.refresh": "刷新频率", "set.refreshHint": "刷新回到协作室后生效。",
+    "set.language": "语言", "set.theme": "外观", "set.hours": "默认时间范围", "set.refresh": "刷新频率", "set.refreshHint": "刷新回到Bot协作室后生效。",
     "set.motion": "动画", "set.ambient": "自动放映", "set.ambientHint": "没有协作时，舞台自动重播最近的交接，常搭档也会互相串门。",
     "set.privacyMode": "隐私模式", "set.privacyHint": "隐藏所有消息内容和 bot 介绍，只保留谁和谁在协作。适合截图、录屏和投屏。",
-    "set.localOnly": "协作室只监听本机（127.0.0.1），只读 Grok Bot 的本地缓存，不会修改它，也不会把数据发到任何地方。",
+    "set.localOnly": "Bot协作室只监听本机（127.0.0.1），只读 Grok Bot 的本地缓存，不会修改它，也不会把数据发到任何地方。",
     "set.source": "数据来源", "set.folder": "Grok Bot 数据目录", "set.folderHint": "留空会自动查找：macOS 在 ~/Library/Application Support/Grok Bot，Windows 在 %APPDATA%\\Grok Bot，Linux 在 ~/.config/Grok Bot。",
     "set.folderAuto": "自动查找", "set.statusDemo": "正在使用演示数据。", "set.statusGrok": "已读到 {n} 个 bot · {path}",
     "set.roomsHint": "房间来自 Grok Bot 侧边栏的分组。可以改显示名称、调整顺序或隐藏。没有分组的 bot 会放在「未分组」房间。",
     "set.noRooms": "还没有读到分组。", "set.roomName": "显示名称", "set.up": "上移", "set.down": "下移", "set.show": "显示",
-    "set.botsHint": "选一个 bot，给它换形状、颜色、表情、帽子、手持物和服饰。改名和隐藏只影响协作室，不会改 Grok Bot。",
-    "set.noBots": "还没有读到 bot。", "set.hiddenTag": "已隐藏", "set.previewState": "预览状态", "set.alias": "在协作室里的名字", "set.hideBot": "在办公室里隐藏这个 bot",
+    "set.botsHint": "选一个 bot，给它换形状、颜色、表情、帽子、手持物和服饰。改名和隐藏只影响Bot协作室，不会改 Grok Bot。",
+    "set.noBots": "还没有读到 bot。", "set.hiddenTag": "已隐藏", "set.previewState": "预览状态", "set.alias": "在Bot协作室里的名字", "set.hideBot": "在办公室里隐藏这个 bot",
     "set.random": "随机一套", "set.reset": "恢复默认",
     "opt.auto": "跟随系统", "opt.system": "跟随系统", "opt.light": "浅色", "opt.dark": "深色",
     "opt.motionFull": "完整动画", "opt.motionCalm": "安静一点（不串门）", "opt.motionOff": "关闭动画",
     "opt.sourceAuto": "自动（找不到 Grok Bot 时用演示数据）", "opt.sourceGrok": "只用 Grok Bot 数据", "opt.sourceDemo": "演示数据",
-    "about.what": "Grok 协作室把 Grok Bot 里各个 bot 之间的交接画成一间会动的办公室，灵感来自 Star-Office-UI。",
+    "about.what": "Bot协作室把 Grok Bot 里各个 bot 之间的交接画成一间会动的办公室，灵感来自 Star-Office-UI。",
     "about.data": "数据全部来自本机 Grok Bot 缓存，只读；设置保存在项目目录里，不会上传。",
     "about.file": "设置文件：", "about.license": "代码以 MIT 许可开源。所有角色和场景都是项目自带的 SVG。",
     "part.shape": "身体", "part.color": "颜色", "part.eyes": "眼睛", "part.mouth": "嘴巴", "part.hat": "帽子", "part.item": "手持", "part.outfit": "服饰",
@@ -105,7 +105,7 @@ const I18N = {
     "asset.outfit.none": "无", "asset.outfit.scarf": "围巾", "asset.outfit.bowtie": "领结", "asset.outfit.tie": "领带", "asset.outfit.lanyard": "工牌", "asset.outfit.apron": "围裙",
   },
   en: {
-    "app.title": "Grok Collab Room",
+    "app.title": "Bot Office",
     "app.tagline": "Watch your bot team split up work, hand it off and help each other, live",
     "lang.switch": "中",
     "loading": "Loading…",
@@ -179,7 +179,7 @@ const I18N = {
     "profile.outputs": "{n} outputs", "profile.peak": "Busiest around {h}:00", "profile.replies": "Replies to you", "profile.out": "Handed off", "profile.in": "Picked up", "profile.chars": "Characters", "profile.speed": "Typical reply", "profile.autos": "Schedules",
     "profile.notInOffice": "Not in the office", "profile.days": "Day {n} on the team", "profile.last": "last active {when}", "profile.toNext": "{n} XP to go", "profile.customize": "Change look",
     "profile.more": "Show more", "profile.less": "Show less", "profile.hours": "When is it busiest", "profile.twoWeeks": "Last two weeks", "profile.partners": "Regular partners", "profile.autosTitle": "Schedules", "profile.flows": "Relays in this period",
-    "settings.title": "Settings", "settings.tagline": "Everything is saved on this computer only", "settings.back": "← Back to the room", "settings.saved": "Saved", "settings.saveFailed": "Couldn't save",
+    "settings.title": "Settings", "settings.tagline": "Everything is saved on this computer only", "settings.back": "← Back to Bot Office", "settings.saved": "Saved", "settings.saveFailed": "Couldn't save",
     "set.general": "General", "set.privacy": "Privacy", "set.data": "Data source", "set.rooms": "Rooms", "set.bots": "Bots & looks", "set.about": "About",
     "set.language": "Language", "set.theme": "Appearance", "set.hours": "Default time range", "set.refresh": "Refresh every", "set.refreshHint": "Takes effect when you reload the room.",
     "set.motion": "Animation", "set.ambient": "Auto replay", "set.ambientHint": "When nothing is happening, the stage replays recent handoffs and regular partners drop by each other.",
@@ -189,13 +189,13 @@ const I18N = {
     "set.folderAuto": "Detect automatically", "set.statusDemo": "Using demo data.", "set.statusGrok": "Found {n} bots · {path}",
     "set.roomsHint": "Rooms come from your Grok Bot sidebar groups. Rename, reorder or hide them here. Bots without a group go to the “Ungrouped” room.",
     "set.noRooms": "No groups found yet.", "set.roomName": "Display name", "set.up": "Move up", "set.down": "Move down", "set.show": "Show",
-    "set.botsHint": "Pick a bot and change its shape, colour, face, hat, held item and outfit. Renaming and hiding only affect this room, never Grok Bot.",
-    "set.noBots": "No bots found yet.", "set.hiddenTag": "hidden", "set.previewState": "Preview state", "set.alias": "Name in the room", "set.hideBot": "Hide this bot from the office",
+    "set.botsHint": "Pick a bot and change its shape, colour, face, hat, held item and outfit. Renaming and hiding only affect Bot Office, never Grok Bot.",
+    "set.noBots": "No bots found yet.", "set.hiddenTag": "hidden", "set.previewState": "Preview state", "set.alias": "Name in Bot Office", "set.hideBot": "Hide this bot from the office",
     "set.random": "Surprise me", "set.reset": "Reset",
     "opt.auto": "Match system", "opt.system": "Match system", "opt.light": "Light", "opt.dark": "Dark",
     "opt.motionFull": "Full", "opt.motionCalm": "Calmer (no visits)", "opt.motionOff": "Off",
     "opt.sourceAuto": "Automatic (demo if Grok Bot isn't found)", "opt.sourceGrok": "Grok Bot only", "opt.sourceDemo": "Demo data",
-    "about.what": "Grok Collab Room turns handoffs between your Grok Bot bots into a living office. Inspired by Star-Office-UI.",
+    "about.what": "Bot Office turns handoffs between your Grok Bot bots into a living office. Inspired by Star-Office-UI.",
     "about.data": "All data comes from Grok Bot's local cache, read-only; settings stay in the project folder and are never uploaded.",
     "about.file": "Settings file:", "about.license": "Code is MIT licensed. Every character and scene is SVG shipped with the project.",
     "part.shape": "Body", "part.color": "Colour", "part.eyes": "Eyes", "part.mouth": "Mouth", "part.hat": "Hat", "part.item": "Holding", "part.outfit": "Outfit",
@@ -225,5 +225,7 @@ function translatePage(root = document) {
   for (const node of root.querySelectorAll("[data-i18n]")) node.textContent = t(node.dataset.i18n);
   for (const node of root.querySelectorAll("[data-i18n-aria]")) node.setAttribute("aria-label", t(node.dataset.i18nAria));
   for (const node of root.querySelectorAll("[data-i18n-title]")) node.setAttribute("title", t(node.dataset.i18nTitle));
-  document.title = root === document && document.body.classList.contains("settings-page") ? `${t("settings.title")} · ${t("app.title")}` : t("app.title");
+  const settingsPage = root === document && document.body.classList.contains("settings-page");
+  const settingsTitle = t("settings.title");
+  document.title = settingsPage ? (settingsTitle.includes(t("app.title")) ? settingsTitle : `${settingsTitle} · ${t("app.title")}`) : t("app.title");
 }

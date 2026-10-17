@@ -222,7 +222,8 @@ addEventListener("resize", () => {
 
 (async function boot() {
   ensureAvatarDefs();
-  $("#brand-mascot").innerHTML = mascotSVG(50);
+  $("#brand-logo").innerHTML = logoSVG(40);
+  paintIcons();
   await loadSettings();
   pressHours(S.settings.hours);
   $("#ambient").checked = S.ambient;

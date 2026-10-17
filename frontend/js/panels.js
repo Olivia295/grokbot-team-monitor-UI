@@ -27,13 +27,18 @@ function renderHero() {
     const left = Math.max(0, 100 - usage.percentUsed);
     const days = usage.nextResetMs ? Math.max(0, Math.ceil((usage.nextResetMs - Date.now()) / 86400e3)) : null;
     const level = left > 40 ? "" : left > 15 ? "low" : "empty";
-    $("#fuel").innerHTML = `<h3>⚡ ${t("fuel.title")}</h3><div class="jar">${mascotSVG(72)}</div>
+    const r = 30;
+    const dash = (2 * Math.PI * r * left) / 100;
+    $("#fuel").innerHTML = `<h3>${icon("bolt")} ${t("fuel.title")}</h3>
+      <div class="jar"><svg viewBox="0 0 76 76" role="img" aria-label="${esc(t("fuel.aria", { n: Math.round(left) }))}">
+        <circle cx="38" cy="38" r="${r}" fill="none" stroke="var(--line)" stroke-width="8"/>
+        <circle class="ring ${level}" cx="38" cy="38" r="${r}" fill="none" stroke-width="8" stroke-linecap="round" stroke-dasharray="${dash.toFixed(1)} 999" transform="rotate(-90 38 38)"/>
+        <text x="38" y="43" text-anchor="middle" class="ring-text">${Math.round(left)}%</text></svg></div>
       <div class="big">${Math.round(left)}<small>% ${t("fuel.left")}</small></div>
       <p>${esc(usage.plan || "Grok")}${days == null ? "" : ` · ${days ? t("fuel.reset", { n: days }) : t("fuel.resetToday")}`}</p>
-      <p>${t(left > 40 ? "fuel.ok" : left > 15 ? "fuel.low" : "fuel.empty")}</p>
-      <div class="energy ${level}" role="img" aria-label="${esc(t("fuel.aria", { n: Math.round(left) }))}"><i style="width:${left}%"></i></div>`;
+      <p>${t(left > 40 ? "fuel.ok" : left > 15 ? "fuel.low" : "fuel.empty")}</p>`;
   } else {
-    $("#fuel").innerHTML = `<h3>⚡ ${t("fuel.title")}</h3><p style="grid-column:1/-1">${t("fuel.none")}</p>`;
+    $("#fuel").innerHTML = `<h3>${icon("bolt")} ${t("fuel.title")}</h3><p style="grid-column:1/-1">${t("fuel.none")}</p>`;
   }
 }
 

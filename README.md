@@ -1,4 +1,4 @@
-# Grok 协作室 · Grok Collab Room
+# grokbot-teamwork-UI · Bot协作室
 
 🌐 **中文** | [English](./README.en.md)
 
@@ -12,8 +12,8 @@
 ## 快速开始
 
 ```bash
-git clone <你的仓库地址> grok-collab-room
-cd grok-collab-room
+git clone <你的仓库地址> grokbot-teamwork-UI
+cd grokbot-teamwork-UI
 ./start.sh
 ```
 

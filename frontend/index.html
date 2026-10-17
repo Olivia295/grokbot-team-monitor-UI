@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Grok Collab Room</title>
+  <title>Bot Office</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
   <header class="top">
     <div class="brand">
-      <span class="brand-mascot" id="brand-mascot"></span>
-      <div><h1 data-i18n="app.title">Grok 协作室</h1><p data-i18n="app.tagline"></p></div>
+      <span class="brand-logo" id="brand-logo"></span>
+      <div><h1 data-i18n="app.title">Bot协作室</h1><p data-i18n="app.tagline"></p></div>
     </div>
     <div class="top-tools">
       <div class="segmented" role="group" data-i18n-aria="aria.window">
@@ -20,8 +20,8 @@
         <button type="button" data-hours="720" aria-pressed="false" data-i18n="window.720"></button>
       </div>
       <button type="button" class="icon-btn lang-btn" id="lang" data-i18n="lang.switch" data-i18n-aria="aria.lang"></button>
-      <button type="button" class="icon-btn" id="theme" data-i18n-aria="aria.theme">🌙</button>
-      <a class="icon-btn" href="/settings" data-i18n-aria="aria.settings" data-i18n-title="aria.settings">⚙️</a>
+      <button type="button" class="icon-btn" id="theme" data-i18n-aria="aria.theme"></button>
+      <a class="icon-btn" href="/settings" data-i18n-aria="aria.settings" data-i18n-title="aria.settings"><i data-icon="gear"></i></a>
       <span class="pill" id="connection" role="status"></span>
     </div>
   </header>
@@ -41,7 +41,7 @@
     </section>
 
     <section class="awards-wrap" aria-labelledby="awards-title">
-      <div class="section-title"><h2 id="awards-title">🏆 <span data-i18n="awards.title"></span></h2><span class="muted" id="awards-note"></span></div>
+      <div class="section-title"><h2 id="awards-title"><i data-icon="trophy" data-size="18"></i> <span data-i18n="awards.title"></span></h2><span class="muted" id="awards-note"></span></div>
       <ol class="awards" id="awards"></ol>
     </section>
 
@@ -49,9 +49,9 @@
       <section class="card stage" data-i18n-aria="aria.stage">
         <header class="stage-bar">
           <div class="tabs" role="tablist" data-i18n-aria="aria.views">
-            <button type="button" role="tab" data-view="studio" aria-selected="true">🏢 <span data-i18n="view.studio"></span></button>
-            <button type="button" role="tab" data-view="stars" aria-selected="false">🕸 <span data-i18n="view.stars"></span></button>
-            <button type="button" role="tab" data-view="track" aria-selected="false">⏱ <span data-i18n="view.track"></span></button>
+            <button type="button" role="tab" data-view="studio" aria-selected="true"><i data-icon="studio"></i><span data-i18n="view.studio"></span></button>
+            <button type="button" role="tab" data-view="stars" aria-selected="false"><i data-icon="network"></i><span data-i18n="view.stars"></span></button>
+            <button type="button" role="tab" data-view="track" aria-selected="false"><i data-icon="timeline"></i><span data-i18n="view.track"></span></button>
           </div>
           <p class="stage-hint muted" id="stage-hint"></p>
           <label class="switch"><input type="checkbox" id="ambient" checked><span></span><b data-i18n="stage.ambient"></b></label>
@@ -103,31 +103,31 @@
     </div>
 
     <section class="insights" aria-labelledby="insights-title">
-      <div class="section-title"><h2 id="insights-title">🔎 <span data-i18n="insights.title"></span></h2><span class="muted" data-i18n="insights.note"></span></div>
+      <div class="section-title"><h2 id="insights-title"><i data-icon="insights" data-size="18"></i> <span data-i18n="insights.title"></span></h2><span class="muted" data-i18n="insights.note"></span></div>
       <div class="insight-grid">
         <article class="card insight">
-          <header><h3>🙋 <span data-i18n="attn.title"></span> <span class="count" id="attention-count"></span></h3></header>
+          <header><h3><i data-icon="inbox"></i><span data-i18n="attn.title"></span> <span class="count" id="attention-count"></span></h3></header>
           <div id="attention"></div>
         </article>
         <article class="card insight">
-          <header><h3>📰 <span data-i18n="digest.title"></span></h3>
+          <header><h3><i data-icon="digest"></i><span data-i18n="digest.title"></span></h3>
             <div class="mini-seg" role="group" data-i18n-aria="digest.title"><button type="button" data-digest="0" aria-pressed="true" data-i18n="time.today"></button><button type="button" data-digest="1" aria-pressed="false" data-i18n="time.yesterday"></button></div></header>
           <div id="digest"></div>
           <button type="button" class="small-btn" id="digest-copy" data-i18n="digest.copy"></button>
         </article>
         <article class="card insight">
-          <header><h3>⏰ <span data-i18n="autos.title"></span> <span class="count" id="autos-count"></span></h3></header>
+          <header><h3><i data-icon="clock"></i><span data-i18n="autos.title"></span> <span class="count" id="autos-count"></span></h3></header>
           <div id="automations"></div>
         </article>
         <article class="card insight wide">
-          <header><h3>🗓 <span data-i18n="rhythm.title"></span></h3><span class="muted" data-i18n="rhythm.note"></span></header>
+          <header><h3><i data-icon="grid"></i><span data-i18n="rhythm.title"></span></h3><span class="muted" data-i18n="rhythm.note"></span></header>
           <div id="rhythm"></div>
         </article>
       </div>
     </section>
 
     <section class="card roster-wrap" aria-labelledby="roster-title">
-      <div class="section-title"><h2 id="roster-title">👥 <span data-i18n="roster.title"></span></h2><span class="muted" data-i18n="roster.note"></span></div>
+      <div class="section-title"><h2 id="roster-title"><i data-icon="team" data-size="18"></i> <span data-i18n="roster.title"></span></h2><span class="muted" data-i18n="roster.note"></span></div>
       <div class="roster" id="roster"></div>
     </section>
     <footer class="foot muted"><span class="live-dot"></span><span id="freshness"></span><span class="spacer"></span><a href="/settings" data-i18n="foot.settings"></a></footer>

@@ -1,4 +1,4 @@
-# Grok Collab Room
+# grokbot-teamwork-UI · Bot Office
 
 🌐 [中文](./README.md) | **English**
 
@@ -12,8 +12,8 @@ Turns the handoffs between your [Grok Bot](https://grok.com) bots into a living 
 ## Quick start
 
 ```bash
-git clone <your-repo-url> grok-collab-room
-cd grok-collab-room
+git clone <your-repo-url> grokbot-teamwork-UI
+cd grokbot-teamwork-UI
 ./start.sh
 ```
 

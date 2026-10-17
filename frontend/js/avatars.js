@@ -264,20 +264,6 @@ function planeSVG(color = "#5b9fdc") {
     <circle cy="3" r="3.2" fill="${color}" ${L} stroke-width="1.1"/></g>`;
 }
 
-// The app mascot.
-function mascotSVG(size = 44) {
-  return `<svg class="mascot" width="${size}" height="${size}" viewBox="-34 -40 68 68" aria-hidden="true">
-    <path d="M0 -24v-6" stroke="${LINE}" stroke-width="2.2" stroke-linecap="round"/>
-    <circle class="mascot-heart" cx="0" cy="-32" r="4.2" fill="#ffd75e" ${L}/>
-    <rect x="-26" y="-24" width="52" height="44" rx="18" fill="#8cc6f7" stroke="#5b9fdc" stroke-width="2.4"/>
-    <rect x="-18" y="-16" width="36" height="24" rx="12" fill="#fff"/>
-    <ellipse cx="-7" cy="-5" rx="3.2" ry="4" fill="#2b2d42"/><ellipse cx="7" cy="-5" rx="3.2" ry="4" fill="#2b2d42"/>
-    <circle cx="-6" cy="-6.6" r="1.3" fill="#fff"/><circle cx="8" cy="-6.6" r="1.3" fill="#fff"/>
-    <path d="M-3 2q3 2.6 6 0" fill="none" stroke="#2b2d42" stroke-width="1.8" stroke-linecap="round"/>
-    <ellipse cx="-13" cy="3" rx="3.4" ry="2.2" fill="#ff8fa3" opacity=".5"/><ellipse cx="13" cy="3" rx="3.4" ry="2.2" fill="#ff8fa3" opacity=".5"/>
-  </svg>`;
-}
-
 // A standalone <svg> avatar for lists and cards.
 function avatarSVG(agent, size = 40, kind = "agent", override) {
   const art = kind === "you" ? personSVG() : kind === "automation" ? clockSVG() : creatureSVG(agent, override);
@@ -302,4 +288,23 @@ function speechHalfWidth(text) {
   let width = 16;
   for (const ch of String(text || "")) width += ch.charCodeAt(0) > 0x2e80 ? 12 : 6.6;
   return Math.max(20, width / 2);
+}
+
+// The Bot Office mark: a bot head inside an orbit with two teammates riding it.
+// Monochrome on purpose so it sits well next to Grok's black-and-white look.
+function logoSVG(size = 40) {
+  return `<svg class="logo" width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true">
+    <rect width="64" height="64" rx="18" fill="#0d0d0f"/>
+    <rect x=".5" y=".5" width="63" height="63" rx="17.5" fill="none" stroke="#ffffff" stroke-opacity=".12"/>
+    <g class="logo-orbit">
+      <ellipse cx="32" cy="35" rx="27" ry="9.5" transform="rotate(-24 32 35)" fill="none" stroke="#ffffff" stroke-opacity=".38" stroke-width="1.6"/>
+      <circle cx="56" cy="24" r="3.4" fill="#ffffff"/>
+      <circle cx="8" cy="46" r="2.6" fill="#ffffff" fill-opacity=".7"/>
+    </g>
+    <path d="M32 21v-6" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+    <circle class="logo-beacon" cx="32" cy="12.5" r="3.4" fill="#ffffff"/>
+    <rect x="16" y="21" width="32" height="26" rx="11" fill="#0d0d0f" stroke="#ffffff" stroke-width="3.2"/>
+    <rect class="logo-eye" x="24.5" y="29" width="4" height="9" rx="2" fill="#ffffff"/>
+    <rect class="logo-eye" x="35.5" y="29" width="4" height="9" rx="2" fill="#ffffff"/>
+  </svg>`;
 }

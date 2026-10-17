@@ -240,7 +240,8 @@ function render() {
 
 (async function boot() {
   ensureAvatarDefs();
-  $("#brand-mascot").innerHTML = mascotSVG(50);
+  $("#brand-logo").innerHTML = logoSVG(40);
+  paintIcons();
   await loadSettings();
   fillControls();
   const match = location.hash.match(/^#bot=(.+)$/);
