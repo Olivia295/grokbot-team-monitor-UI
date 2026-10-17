@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Grok Collab Room</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="brand-mascot" id="brand-mascot"></span>
+      <div><h1 data-i18n="app.title">Grok 协作室</h1><p data-i18n="app.tagline"></p></div>
+    </div>
+    <div class="top-tools">
+      <div class="segmented" role="group" data-i18n-aria="aria.window">
+        <button type="button" data-hours="24" aria-pressed="true" data-i18n="window.24"></button>
+        <button type="button" data-hours="168" aria-pressed="false" data-i18n="window.168"></button>
+        <button type="button" data-hours="720" aria-pressed="false" data-i18n="window.720"></button>
+      </div>
+      <button type="button" class="icon-btn lang-btn" id="lang" data-i18n="lang.switch" data-i18n-aria="aria.lang"></button>
+      <button type="button" class="icon-btn" id="theme" data-i18n-aria="aria.theme">🌙</button>
+      <a class="icon-btn" href="/settings" data-i18n-aria="aria.settings" data-i18n-title="aria.settings">⚙️</a>
+      <span class="pill" id="connection" role="status"></span>
+    </div>
+  </header>
+
+  <main class="page">
+    <p class="banner" id="banner" role="status" hidden></p>
+
+    <section class="hero">
+      <div class="card hero-main">
+        <div class="hero-art" id="hero-art" aria-hidden="true"></div>
+        <p class="eyebrow" id="greeting"></p>
+        <h2 id="hero-title"></h2>
+        <p class="headline" id="headline" aria-live="polite"></p>
+        <div class="tiles" id="tiles"></div>
+      </div>
+      <div class="card fuel" id="fuel"></div>
+    </section>
+
+    <section class="awards-wrap" aria-labelledby="awards-title">
+      <div class="section-title"><h2 id="awards-title">🏆 <span data-i18n="awards.title"></span></h2><span class="muted" id="awards-note"></span></div>
+      <ol class="awards" id="awards"></ol>
+    </section>
+
+    <div class="layout">
+      <section class="card stage" data-i18n-aria="aria.stage">
+        <header class="stage-bar">
+          <div class="tabs" role="tablist" data-i18n-aria="aria.views">
+            <button type="button" role="tab" data-view="studio" aria-selected="true">🏢 <span data-i18n="view.studio"></span></button>
+            <button type="button" role="tab" data-view="stars" aria-selected="false">🕸 <span data-i18n="view.stars"></span></button>
+            <button type="button" role="tab" data-view="track" aria-selected="false">⏱ <span data-i18n="view.track"></span></button>
+          </div>
+          <p class="stage-hint muted" id="stage-hint"></p>
+          <label class="switch"><input type="checkbox" id="ambient" checked><span></span><b data-i18n="stage.ambient"></b></label>
+        </header>
+        <div class="replay-bar" id="replay-bar" hidden>
+          <button type="button" class="ghost" id="replay-exit" data-i18n="replay.exit"></button>
+          <div class="replay-title" id="replay-title"></div>
+          <div class="replay-controls">
+            <button type="button" id="replay-prev" data-i18n-aria="replay.prev">‹</button>
+            <button type="button" id="replay-play" data-i18n-aria="replay.play">▶</button>
+            <button type="button" id="replay-next" data-i18n-aria="replay.next">›</button>
+            <button type="button" id="replay-speed" data-i18n-aria="replay.speed">1×</button>
+          </div>
+        </div>
+        <div class="stage-body" id="stage-body">
+          <div class="toasts" id="toasts" aria-live="polite"></div>
+          <svg id="studio" class="view" viewBox="0 0 1200 680" role="img" data-i18n-aria="view.studio"></svg>
+          <svg id="stars" class="view" viewBox="0 0 1200 680" role="img" data-i18n-aria="view.stars" hidden></svg>
+          <div id="track" class="view track" hidden></div>
+        </div>
+        <div class="narration idle" id="narration"></div>
+        <div class="scrubber" id="scrubber" hidden></div>
+      </section>
+
+      <aside class="card side">
+        <div id="side-list">
+          <div class="tabs side-tabs" role="tablist" data-i18n-aria="aria.side">
+            <button type="button" role="tab" data-side="flows" aria-selected="true"><span data-i18n="side.flows"></span> <span class="count" id="flow-count"></span></button>
+            <button type="button" role="tab" data-side="pairs" aria-selected="false" data-i18n="side.pairs"></button>
+            <button type="button" role="tab" data-side="feed" aria-selected="false" data-i18n="side.feed"></button>
+          </div>
+          <div id="flows-pane">
+            <div class="chips" role="group" data-i18n-aria="aria.filter">
+              <button type="button" data-filter="all" aria-pressed="true" data-i18n="filter.all"></button>
+              <button type="button" data-filter="user" aria-pressed="false" data-i18n="filter.user"></button>
+              <button type="button" data-filter="automation" aria-pressed="false" data-i18n="filter.automation"></button>
+              <button type="button" data-filter="active" aria-pressed="false" data-i18n="filter.active"></button>
+            </div>
+            <ol class="flow-list" id="flow-list"><li class="empty" data-i18n="loading"></li></ol>
+          </div>
+          <div id="pairs-pane" hidden><p class="pane-note muted" data-i18n="pairs.note"></p><ol class="pairs-list" id="pairs-list"></ol></div>
+          <ol class="feed" id="feed" hidden></ol>
+        </div>
+        <div id="side-detail" hidden>
+          <header class="detail-head"><button type="button" class="ghost" id="detail-back" data-i18n="detail.back"></button><span class="muted" id="detail-meta"></span></header>
+          <div id="flow-detail"></div>
+        </div>
+      </aside>
+    </div>
+
+    <section class="insights" aria-labelledby="insights-title">
+      <div class="section-title"><h2 id="insights-title">🔎 <span data-i18n="insights.title"></span></h2><span class="muted" data-i18n="insights.note"></span></div>
+      <div class="insight-grid">
+        <article class="card insight">
+          <header><h3>🙋 <span data-i18n="attn.title"></span> <span class="count" id="attention-count"></span></h3></header>
+          <div id="attention"></div>
+        </article>
+        <article class="card insight">
+          <header><h3>📰 <span data-i18n="digest.title"></span></h3>
+            <div class="mini-seg" role="group" data-i18n-aria="digest.title"><button type="button" data-digest="0" aria-pressed="true" data-i18n="time.today"></button><button type="button" data-digest="1" aria-pressed="false" data-i18n="time.yesterday"></button></div></header>
+          <div id="digest"></div>
+          <button type="button" class="small-btn" id="digest-copy" data-i18n="digest.copy"></button>
+        </article>
+        <article class="card insight">
+          <header><h3>⏰ <span data-i18n="autos.title"></span> <span class="count" id="autos-count"></span></h3></header>
+          <div id="automations"></div>
+        </article>
+        <article class="card insight wide">
+          <header><h3>🗓 <span data-i18n="rhythm.title"></span></h3><span class="muted" data-i18n="rhythm.note"></span></header>
+          <div id="rhythm"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="card roster-wrap" aria-labelledby="roster-title">
+      <div class="section-title"><h2 id="roster-title">👥 <span data-i18n="roster.title"></span></h2><span class="muted" data-i18n="roster.note"></span></div>
+      <div class="roster" id="roster"></div>
+    </section>
+    <footer class="foot muted"><span class="live-dot"></span><span id="freshness"></span><span class="spacer"></span><a href="/settings" data-i18n="foot.settings"></a></footer>
+  </main>
+
+  <dialog class="drawer" id="profile" aria-labelledby="profile-name">
+    <button type="button" class="icon-btn close" id="profile-close" data-i18n-aria="aria.close">✕</button>
+    <div id="profile-body"></div>
+  </dialog>
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+
+  <script src="/js/i18n.js"></script>
+  <script src="/js/avatars.js"></script>
+  <script src="/js/common.js"></script>
+  <script src="/js/stage.js"></script>
+  <script src="/js/panels.js"></script>
+  <script src="/js/main.js"></script>
+</body>
+</html>

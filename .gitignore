@@ -1,0 +1,6 @@
+# Your local settings (renames, looks, privacy) stay on your machine.
+data/
+__pycache__/
+*.pyc
+.DS_Store
+.claude/
