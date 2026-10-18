@@ -45,7 +45,7 @@ Bot协作室读取 Grok Bot 留在本机的缓存，把这些交接拼回完整�
 ## 快速开始
 
 ```bash
-git clone https://github.com/<your-username>/grokbot-teamwork-UI.git
+git clone https://github.com/Olivia295/grokbot-teamwork-UI.git
 cd grokbot-teamwork-UI
 ./start.sh
 ```
