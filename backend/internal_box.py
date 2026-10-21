@@ -3,11 +3,15 @@
 Ported from the bot-dashboard collector. Standard library only. This module
 never writes, and it never lists or reads:
 
-- ``<notion-nexus>/inbox``, ``snapshots``, ``raw`` (including through symlinks)
+- an ``inbox``, ``snapshots`` or ``raw`` folder inside any bot folder (including through symlinks)
 - ``~/.codex`` and ``~/.grok``
-- files named ``auth.json``, anything with ``token`` in the name, or ``*.env``
+- files whose names look like credentials (see ``is_secret_name``), and any agent ``store.db``
 - filenames containing 周记 or 日记
 - any non-markdown file, when the caller wants log text
+
+Bot folders, extra log files, old names and the push schedule come from
+``roster.md`` itself (with a name-based fallback), so no bot names live in code
+apart from the privacy rule for Willow Mage.
 
 Willow Mage is included like the other bots for work metadata only. Her
 status comes from ``search-index.db`` timestamps (never her files). Message
@@ -28,15 +32,14 @@ import os
 import re
 import sqlite3
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote
-from zoneinfo import ZoneInfo
 
-try:
-    SYDNEY = ZoneInfo("Australia/Sydney")
-except Exception:  # Windows Python 3.9 often has no IANA data.
-    SYDNEY = timezone(timedelta(hours=10))
+# Times follow the box's own clock and timezone (the box is set to Sydney time).
+# SYDNEY is the old name, kept for callers; conversions below use the local zone per instant.
+LOCAL_TZ = datetime.now().astimezone().tzinfo
+SYDNEY = LOCAL_TZ
 
 WINDOW_DAYS = 7
 TASK_LIMIT = 5
@@ -52,25 +55,15 @@ ESTIMATE_LABEL = "估算：按最近7天日志条目数与文件改动数，不�
 DEFAULT_WORKSPACE = Path("/workspace")
 DEFAULT_ROSTER = Path("/workspace/roster.md")
 DEFAULT_AGENT_DATA = Path("/home/box/agent-data")
-
-# Slug under the workspace root. Dr Eggbot has no folder. Willow Mage may have
-# one; it is never opened. Her status comes from the message index instead.
-FOLDER_SLUGS = (
-    ("Grok Bot", "grok-bot"),
-    ("Morning Bridge", "morning-bridge"),
-    ("Notion Nexus", "notion-nexus"),
-    ("Idea Prism", "idea-prism"),
-    ("Content Forge", "content-forge"),
-    ("Spaceship Co-Pilot", "spaceship-copilot"),
-    ("CodexCodex", "codexcodex"),
-    ("Code Scout", "code-scout"),
-    ("X Search Bot", "x-search-bot"),
-    ("Deep Dive", "deep-dive"),
-    ("Serendipity Creator", "serendipity-creator"),
-)
+DEFAULT_DISPATCHER = "Grok Bot"  # the platform's own lead bot; the one that writes dispatch-log.md wins
 
 LOG_NAMES = ("log.md", "dispatch-log.md", "evolution-log.md")
+# Any other "<something>-log.md" in a bot folder is a log too (news-log.md, reforge-log.md, …).
+LOG_FILE_RE = re.compile(r"^[\w.\-]*(?:^|[-_.])log\.md$", re.I)
 PRIVATE_CHILD_NAMES = ("inbox", "snapshots", "raw")
+# Never opened, whatever the folder: credentials, browser cookies, and each agent's full store.
+SECRET_NAME_RE = re.compile(r"token|secret|cookie|credential|password|passwd|private[-_]?key|id_rsa|id_ed25519", re.I)
+NEVER_OPEN = {"auth.json", "store.db", "store.db-wal", "store.db-shm"}
 
 # 7-day line counter: dates written as YYYY-MM-DD (any year, so it keeps working after 2026).
 DATE_RE = re.compile(r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)")
@@ -99,13 +92,18 @@ class BoxConfig:
         forbidden_dirs: tuple[str, ...],
         skip_child_names: dict[str, set[str]],
         dispatch_log: Path,
+        workspace: Path | None = None,
     ) -> None:
         self.roster_path = Path(roster_path)
         self.agent_data = Path(agent_data)
+        # Explicit folders (tests, overrides). Everything else is resolved from the roster.
         self.folder_map = {name: Path(path) for name, path in folder_map.items()}
         self.forbidden_dirs = tuple(forbidden_dirs)
         self.skip_child_names = {key: set(names) for key, names in skip_child_names.items()}
         self.dispatch_log = Path(dispatch_log)
+        self.workspace = Path(workspace) if workspace is not None else self.roster_path.parent
+        self.resolved_folders: dict[str, Path] = {}
+        self.extra_logs: set[str] = set()
 
 
 def _forbid_roots(paths: tuple[Path, ...] | list[Path]) -> tuple[str, ...]:
@@ -140,28 +138,33 @@ def make_config(
     """
     workspace = Path(workspace)
     home = Path(home)
-    folder_map: dict[str, Path] = {name: workspace / slug for name, slug in FOLDER_SLUGS}
-    for name, path in (extra_folders or {}).items():
-        folder_map[name] = Path(path)
-    nexus = folder_map["Notion Nexus"]
-    forbidden = _forbid_roots(
-        (
-            nexus / "inbox",
-            nexus / "snapshots",
-            nexus / "raw",
-            home / ".codex",
-            home / ".grok",
-        )
-    )
-    skip = {os.path.abspath(nexus): set(PRIVATE_CHILD_NAMES)}
+    folder_map: dict[str, Path] = {name: Path(path) for name, path in (extra_folders or {}).items()}
+    # Private folders are closed in every bot folder, not just the ones we know about.
+    roots: list[Path] = [home / ".codex", home / ".grok"]
+    skip: dict[str, set[str]] = {}
+    folders = list(folder_map.values())
+    try:
+        folders += [child for child in workspace.iterdir() if child.is_dir()]
+    except OSError:
+        pass
+    for folder in folders:
+        roots += [folder / name for name in PRIVATE_CHILD_NAMES]
+        skip[os.path.abspath(folder)] = set(PRIVATE_CHILD_NAMES)
     return BoxConfig(
         roster_path=Path(roster),
         agent_data=Path(agent_data),
         folder_map=folder_map,
-        forbidden_dirs=forbidden,
+        forbidden_dirs=_forbid_roots(roots),
         skip_child_names=skip,
-        dispatch_log=folder_map["Grok Bot"] / "dispatch-log.md",
+        dispatch_log=workspace / slugify(DEFAULT_DISPATCHER) / "dispatch-log.md",
+        workspace=workspace,
     )
+
+
+def slugify(name: str) -> str:
+    """Folder name for a bot: "Spaceship Co-Pilot" → "spaceship-copilot"."""
+    words = [re.sub(r"[^a-z0-9]", "", word) for word in name.lower().split()]
+    return "-".join(word for word in words if word)
 
 
 def default_config() -> BoxConfig:
@@ -208,12 +211,23 @@ def _is_under(path: str, root: str) -> bool:
     return path == root or path.startswith(root + os.sep)
 
 
+def _private_part(path: str, workspace: str) -> bool:
+    """An inbox / snapshots / raw folder anywhere under the workspace."""
+    if not _is_under(path, workspace):
+        return False
+    rel = os.path.relpath(path, workspace)
+    return any(part in PRIVATE_CHILD_NAMES for part in Path(rel).parts)
+
+
 def is_forbidden(path: str | Path, config: BoxConfig) -> bool:
     """True if ``path`` or its symlink target sits in a directory we must not touch."""
     raw = _abspath(path)
+    workspace = _abspath(config.workspace)
     for root in config.forbidden_dirs:
         if _is_under(raw, root):
             return True
+    if _private_part(raw, workspace):
+        return True
     try:
         real = os.path.realpath(raw)
     except OSError:
@@ -221,7 +235,7 @@ def is_forbidden(path: str | Path, config: BoxConfig) -> bool:
     for root in config.forbidden_dirs:
         if _is_under(real, root):
             return True
-    return False
+    return _private_part(real, os.path.realpath(workspace))
 
 
 def guarded_scandir(path: str | Path, config: BoxConfig):
@@ -232,14 +246,11 @@ def guarded_scandir(path: str | Path, config: BoxConfig):
 
 
 def is_secret_name(name: str) -> bool:
+    """Credentials, cookies, keys and agent stores: never opened (their mtime may still count)."""
     low = name.lower()
-    if low == "auth.json":
+    if low in NEVER_OPEN or low.endswith((".env", ".pem", ".key", ".p12")):
         return True
-    if "token" in low:
-        return True
-    if low.endswith(".env"):
-        return True
-    return False
+    return bool(SECRET_NAME_RE.search(low))
 
 
 def is_skipped_name(name: str) -> bool:
@@ -255,10 +266,10 @@ def assert_readable_log(path: Path, config: BoxConfig) -> None:
         raise PrivacyError(f"refusing sensitive name: {name}")
     if path.suffix.lower() != ".md":
         raise PrivacyError(f"refusing non-md read: {path}")
-    if name not in LOG_NAMES:
+    if name not in LOG_NAMES and not LOG_FILE_RE.match(name) and os.path.abspath(path) not in config.extra_logs:
         raise PrivacyError(f"refusing non-log read: {path}")
     parent = path.parent.resolve()
-    allowed = {item.resolve() for item in config.folder_map.values()}
+    allowed = {item.resolve() for item in list(config.folder_map.values()) + list(config.resolved_folders.values())}
     if parent not in allowed:
         raise PrivacyError(f"refusing log outside a bot root: {path}")
 
@@ -431,7 +442,7 @@ def iter_activity_files(folder: Path, config: BoxConfig):
     if is_forbidden(folder, config):
         raise PrivacyError(f"refusing to scan forbidden folder: {folder}")
     root_key = os.path.abspath(folder)
-    skip_children = config.skip_child_names.get(root_key, set())
+    skip_children = config.skip_child_names.get(root_key, set()) | set(PRIVATE_CHILD_NAMES)
     try:
         children = list(guarded_scandir(folder, config))
     except OSError:
@@ -494,8 +505,19 @@ def scan_folder(folder: Path, now: datetime, config: BoxConfig) -> dict:
 
 
 def bot_log_paths(folder: Path, config: BoxConfig) -> list[Path]:
+    """The usual log names, any other "*-log.md" in the folder, and logs the roster lists for it."""
+    names = list(LOG_NAMES)
+    try:
+        for entry in guarded_scandir(folder, config):
+            if LOG_FILE_RE.match(entry.name) and entry.name not in names:
+                names.append(entry.name)
+    except (OSError, PrivacyError):
+        pass
+    for extra in sorted(config.extra_logs):
+        if os.path.dirname(extra) == os.path.abspath(folder) and os.path.basename(extra) not in names:
+            names.append(os.path.basename(extra))
     paths = []
-    for name in LOG_NAMES:
+    for name in names:
         path = folder / name
         if is_forbidden(path, config) or is_skipped_name(name) or is_secret_name(name):
             continue
@@ -534,6 +556,20 @@ def _sqlite_ro_uri(path: Path) -> str:
     return "file:" + quote(resolved.as_posix(), safe="/:") + "?mode=ro"
 
 
+def connect_ro(path: Path) -> sqlite3.Connection:
+    """Open an SQLite file read-only. A WAL database whose -shm file is missing can't be opened
+    that way; with no -wal file either there is nothing pending, so it is read as immutable."""
+    conn = sqlite3.connect(_sqlite_ro_uri(path), uri=True)
+    try:
+        conn.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchall()
+        return conn
+    except sqlite3.OperationalError:
+        conn.close()
+        if os.path.exists(str(path) + "-wal"):
+            raise
+        return sqlite3.connect(_sqlite_ro_uri(path) + "&immutable=1", uri=True)
+
+
 # Metadata columns only. The body column is intentionally absent.
 _WILLOW_META_SQL = """
 SELECT agent_id, role, timestamp_ms, seq
@@ -564,7 +600,7 @@ def willow_index_meta(config: BoxConfig, agent_ids: set[str]) -> dict:
         return empty
     sql = _WILLOW_META_SQL.format(marks=",".join("?" for _ in ids))
     try:
-        conn = sqlite3.connect(_sqlite_ro_uri(db_path), uri=True)
+        conn = connect_ro(db_path)
     except sqlite3.Error:
         return empty
     try:
@@ -606,7 +642,7 @@ def status_for(newest: float | None, now: datetime, has_folder: bool) -> str:
 
 
 def iso_local(timestamp: float) -> str:
-    return datetime.fromtimestamp(timestamp, SYDNEY).isoformat(timespec="seconds")
+    return datetime.fromtimestamp(timestamp).astimezone().isoformat(timespec="seconds")
 
 
 def split_table_row(line: str) -> list[str] | None:
@@ -626,7 +662,7 @@ def render_summary(now: datetime, counts: Counter, top_activity: list[dict], top
         extra += f"，不监控 {unmonitored} 个"
     sentences = [
         (
-            f"截至 {stamp}（悉尼）：活跃 {counts.get('active', 0)} 个，"
+            f"截至 {stamp}（{now.tzname() or '本地时间'}）：活跃 {counts.get('active', 0)} 个，"
             f"近期 {counts.get('recent', 0)} 个，空闲 {counts.get('idle', 0)} 个"
             f"{extra}。"
         )
@@ -664,9 +700,9 @@ def validate(payload: dict) -> None:
     if usage.get("estimate_label") != ESTIMATE_LABEL:
         raise BoxError("estimate label mismatch")
     willow_rows = [bot for bot in payload["bots"] if bot.get("name") == WILLOW_NAME]
-    if len(willow_rows) != 1:
-        raise BoxError("Willow Mage record missing")
-    willow = willow_rows[0]
+    if len(willow_rows) > 1:
+        raise BoxError("Willow Mage listed twice")
+    willow = willow_rows[0] if willow_rows else {"status": "idle", "message_count": 0}
     if willow.get("status") == "不监控" or willow.get("status") not in ("active", "recent", "idle"):
         raise BoxError(f"Willow Mage status must follow her activity: {willow.get('status')!r}")
     if willow.get("folder"):
@@ -689,23 +725,339 @@ def validate(payload: dict) -> None:
         for task in tasks:
             if len(task) > TASK_CHARS:
                 raise BoxError(f"task exceeds {TASK_CHARS} chars for {bot['name']}")
-        if bot["name"] == "Dr Eggbot" and bot.get("status") != "no-folder":
-            raise BoxError("Dr Eggbot should be no-folder")
     for estimate in usage["estimates"]:
         expected = estimate["log_lines_7d"] + estimate["files_modified_7d"]
         if estimate["activity"] != expected:
             raise BoxError(f"activity mismatch for {estimate['name']}")
 
 
+
+# ---------------------------------------------------------------- roster extras
+# roster.md already says which folder and logs belong to whom, the old names, and when
+# each bot pushes. Every parser here is forgiving: a table it can't understand is skipped
+# and the name-based fallback (slugify) still applies.
+
+TIME_RE = re.compile(r"(?<!\d)([01]?\d|2[0-3])[:：]([0-5]\d)(?!\d)")
+MD_RE = re.compile(r"[\w./\-]*[\w\-]+\.md\b")
+WEEKDAYS = {"一": 0, "二": 1, "三": 2, "四": 3, "五": 4, "六": 5, "日": 6, "天": 6}
+
+
+def _clean_cell(cell: str) -> str:
+    return re.sub(r"[`*_~]", "", cell).strip()
+
+
+def roster_tables(text: str) -> list[tuple[str, list[str], list[list[str]]]]:
+    """Every markdown table as (heading above it, header cells, data rows)."""
+    found: list[tuple[str, list[str], list[list[str]]]] = []
+    heading = ""
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if line.startswith("#"):
+            heading = line.strip()
+        if line.strip().startswith("|") and i + 1 < len(lines) and is_separator_line(lines[i + 1]):
+            header = [_clean_cell(c) for c in line.strip().strip("|").split("|")]
+            rows: list[list[str]] = []
+            i += 2
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                if not is_separator_line(lines[i]):
+                    rows.append([_clean_cell(c) for c in lines[i].strip().strip("|").split("|")])
+                i += 1
+            found.append((heading, header, rows))
+            continue
+        i += 1
+    return found
+
+
+def _names_in(cells: list[str], names: list[str]) -> list[str]:
+    ordered = sorted(set(names), key=len, reverse=True)
+    hits: list[str] = []
+    for cell in cells:
+        for name in ordered:
+            if name and re.search(r"(?<![A-Za-z0-9])" + re.escape(name) + r"(?![A-Za-z0-9])", cell) and name not in hits:
+                hits.append(name)
+    return hits
+
+
+def _days(cells: list[str]) -> list[int] | None:
+    text = " ".join(cells)
+    if "每天" in text or "每日" in text:
+        return None
+    if "工作日" in text:
+        return [0, 1, 2, 3, 4]
+    if "周末" in text:
+        return [5, 6]
+    days = sorted({WEEKDAYS[ch] for ch in re.findall(r"(?:周|星期|礼拜)([一二三四五六日天])", text)})
+    return days or None
+
+
+def parse_roster_extras(text: str, names: list[str]) -> dict:
+    """Old names, folders, extra logs, push schedule, deleted bots and the change log."""
+    extras = {"aliases": {}, "folders": {}, "logs": {}, "schedule": [], "deleted": [], "changes": []}
+    tables = roster_tables(text)
+    for heading, header, rows in tables:
+        if "旧名" in heading:
+            old_col = next((i for i, h in enumerate(header) if "旧" in h), 0)
+            new_col = next((i for i, h in enumerate(header) if "新" in h), len(header) - 1)
+            for row in rows:
+                if len(row) <= max(old_col, new_col):
+                    continue
+                new = next((n for n in names if n == row[new_col] or n in row[new_col]), None)
+                if not new:
+                    continue
+                for old in re.split(r"[、,，/；;]", row[old_col]):
+                    old = old.strip()
+                    if old and old != new and old not in names and len(old) <= 40:
+                        extras["aliases"][old] = new
+    known = names + list(extras["aliases"])
+    canonical = lambda name: extras["aliases"].get(name, name)
+    for heading, header, rows in tables:
+        if "/workspace" in heading or "共享电脑" in heading:
+            for row in rows:
+                bots = {canonical(name) for name in _names_in(row, known)}
+                slugs = [m.group(1) for cell in row for m in re.finditer(r"(?:/workspace/)?([a-z0-9][a-z0-9._\-]*)/", cell)]
+                if len(bots) == 1 and len(slugs) == 1:
+                    extras["folders"].setdefault(bots.pop(), slugs[0])
+        if "日志" in heading and "时间" not in heading:
+            for row in rows:
+                bots = [canonical(name) for name in _names_in(row[:1] or row, known)] or [canonical(n) for n in _names_in(row, known)]
+                files = [m.group(0) for cell in row for m in MD_RE.finditer(cell)]
+                if len(set(bots)) == 1 and files:
+                    extras["logs"].setdefault(bots[0], [])
+                    for name in files:
+                        if name not in extras["logs"][bots[0]]:
+                            extras["logs"][bots[0]].append(name)
+        if "推送时间" in heading or "时间表" in heading:
+            for row in rows:
+                hit = next((TIME_RE.search(cell) for cell in row if TIME_RE.search(cell)), None)
+                bots = [canonical(name) for name in _names_in(row, known)]
+                if not hit or not bots:
+                    continue
+                rest = [cell for cell in row if cell and not TIME_RE.search(cell) and not _names_in([cell], known)]
+                extras["schedule"].append({
+                    "bot": bots[0], "time": f"{int(hit.group(1)):02d}:{hit.group(2)}", "days": _days(row),
+                    "what": max(rest, key=len)[:40] if rest else "",
+                })
+        if "已删除" in heading:
+            extras["deleted"] = [row[0] for row in rows if row and row[0]][:20]
+        if "改动记录" in heading:
+            for row in rows:
+                date = next((DATE_RE.search(cell).group(0) for cell in row if DATE_RE.search(cell)), "")
+                text_cells = [cell for cell in row if cell and not DATE_RE.fullmatch(cell)]
+                if text_cells:
+                    extras["changes"].append({"date": date, "text": " · ".join(text_cells)[:100]})
+    extras["changes"] = sorted(extras["changes"], key=lambda item: item["date"], reverse=True)[:10]
+    return extras
+
+
+def load_extras(config: BoxConfig, names: list[str]) -> dict:
+    try:
+        return parse_roster_extras(read_roster(config), names)
+    except (OSError, PrivacyError, ValueError):
+        return {"aliases": {}, "folders": {}, "logs": {}, "schedule": [], "deleted": [], "changes": []}
+
+
+def resolve_folders(config: BoxConfig, bots: list[dict], extras: dict) -> dict[str, Path]:
+    """Bot → folder: explicit config first, then the roster's folder table, then the bot's slug.
+
+    Only existing folders under the workspace count. The result also opens those folders
+    (and the logs the roster names for them) to ``read_log``.
+    """
+    workspace = config.workspace
+    found: dict[str, Path] = {}
+    for bot in bots:
+        name = bot["name"]
+        candidates = [config.folder_map.get(name)]
+        if extras["folders"].get(name):
+            candidates.append(workspace / extras["folders"][name])
+        candidates.append(workspace / slugify(name))
+        for folder in candidates:
+            if folder is None or is_forbidden(folder, config):
+                continue
+            try:
+                ok = folder.is_dir()
+            except OSError:
+                ok = False
+            if ok and (name in config.folder_map or _is_under(os.path.abspath(folder), os.path.abspath(workspace))):
+                found[name] = folder
+                break
+    config.resolved_folders = found
+    extra_logs: set[str] = set()
+    for name, files in extras["logs"].items():
+        folder = found.get(name)
+        if folder is None:
+            continue
+        for file in files:
+            path = (workspace / file) if "/" in file else (folder / file)
+            path_abs = os.path.abspath(path)
+            if os.path.dirname(path_abs) == os.path.abspath(folder) and path.suffix.lower() == ".md" \
+                    and not is_secret_name(path.name) and not is_skipped_name(path.name) and not is_forbidden(path, config):
+                extra_logs.add(path_abs)
+    config.extra_logs = extra_logs
+    return found
+
+
+def find_dispatcher(config: BoxConfig, bots: list[dict]) -> tuple[str, Path]:
+    """Whoever keeps dispatch-log.md in their folder dispatches; otherwise the platform's lead bot."""
+    for bot in bots:
+        folder = config.resolved_folders.get(bot["name"])
+        if folder is not None and (folder / "dispatch-log.md").is_file() and not is_willow(bot):
+            return bot["name"], folder / "dispatch-log.md"
+    return DEFAULT_DISPATCHER, config.dispatch_log
+
+
+PROFILE_FIELDS = ("name", "title", "avatarShape", "avatarColor", "harness")
+
+
+def read_profiles(config: BoxConfig, skip_ids: set[str]) -> dict[str, dict]:
+    """Display fields from each agents/<id>/profile.json. ``description`` (the bot's instructions)
+    is never kept, and no other file in those folders is opened."""
+    import json
+    root = config.agent_data / "agents"
+    if is_forbidden(root, config) or not root.is_dir():
+        return {}
+    found: dict[str, dict] = {}
+    try:
+        children = list(guarded_scandir(root, config))
+    except (OSError, PrivacyError):
+        return {}
+    for entry in children:
+        if entry.name in skip_ids:
+            continue
+        try:
+            if not entry.is_dir(follow_symlinks=False) or is_forbidden(entry.path, config):
+                continue
+        except OSError:
+            continue
+        profile = Path(entry.path) / "profile.json"
+        if is_forbidden(profile, config):
+            continue
+        try:
+            payload = json.loads(profile.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        fields = {key: payload[key].strip()[:40] for key in PROFILE_FIELDS
+                  if isinstance(payload.get(key), str) and payload[key].strip()}
+        if fields.get("name"):
+            found[entry.name] = fields
+    return found
+
+
+# ---------------------------------------------------------------- run tables in logs
+
+RESULT_HEAD = re.compile(r"结果|result|状态|status", re.I)
+RETRY_HEAD = re.compile(r"重来|重试|retry|retries|attempt", re.I)
+ROUNDS_HEAD = re.compile(r"轮数|rounds?|turns?", re.I)
+FAILED = re.compile(r"失败|fail|error|错误|❌|✗|✘|未完成|没成功|放弃|中断|超时|timeout", re.I)
+
+
+def _number(cell: str) -> float | None:
+    match = re.search(r"\d+(?:\.\d+)?", cell or "")
+    return float(match.group(0)) if match else None
+
+
+def log_runs(text: str) -> dict | None:
+    """A log kept as a run table (time | task | rounds | retries | result): counts, never text."""
+    for _heading, header, rows in roster_tables(text):
+        result = next((i for i, h in enumerate(header) if RESULT_HEAD.search(h)), None)
+        if result is None or not rows or not any(RETRY_HEAD.search(h) or ROUNDS_HEAD.search(h) for h in header):
+            continue
+        retry = next((i for i, h in enumerate(header) if RETRY_HEAD.search(h)), None)
+        rounds = next((i for i, h in enumerate(header) if ROUNDS_HEAD.search(h)), None)
+        retries = failures = 0
+        round_values: list[float] = []
+        last = ""
+        for row in rows:
+            cell = lambda i: row[i] if i is not None and i < len(row) else ""
+            value = _number(cell(retry))
+            if value is not None:
+                retries += int(value)
+            elif cell(retry) and cell(retry) not in ("-", "—", "无", "否", "no", "0"):
+                retries += 1
+            if FAILED.search(cell(result)):
+                failures += 1
+            value = _number(cell(rounds))
+            if value is not None:
+                round_values.append(value)
+            stamp = DATE_RE.search(" ".join(row[:2]))
+            if stamp:
+                time_hit = TIME_RE.search(" ".join(row[:2]))
+                when = stamp.group(0) + (f" {int(time_hit.group(1)):02d}:{time_hit.group(2)}" if time_hit else "")
+                last = max(last, when)
+        return {"runs": len(rows), "retries": retries, "failures": failures, "last": last or None,
+                "avg_rounds": round(sum(round_values) / len(round_values), 1) if round_values else None}
+    return None
+
+
+# ---------------------------------------------------------------- push schedule
+
+def _assistant_times(config: BoxConfig, since_ms: int) -> dict[str, list[int]]:
+    """When each agent last answered (timestamps only, no body)."""
+    db_path = config.agent_data / "search-index.db"
+    if is_forbidden(db_path, config) or not db_path.is_file():
+        return {}
+    try:
+        conn = connect_ro(db_path)
+    except sqlite3.Error:
+        return {}
+    found: dict[str, list[int]] = defaultdict(list)
+    try:
+        for agent_id, stamp in conn.execute(
+                "SELECT agent_id, timestamp_ms FROM messages WHERE role='assistant' AND timestamp_ms >= ?", (since_ms,)):
+            found[str(agent_id)].append(int(stamp))
+    except sqlite3.Error:
+        return {}
+    finally:
+        conn.close()
+    return found
+
+
+def schedule_status(schedule: list[dict], ids: dict[str, str], config: BoxConfig, now: datetime) -> list[dict]:
+    """Today's state of each push: upcoming, done (answered near the time), waiting or missed."""
+    if not schedule:
+        return []
+    times = _assistant_times(config, int((now - timedelta(days=1)).timestamp() * 1000))
+    out = []
+    for item in schedule:
+        hour, minute = map(int, item["time"].split(":"))
+        days = item.get("days")
+        due = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        nxt = due if due > now else due + timedelta(days=1)
+        while days is not None and nxt.weekday() not in days:
+            nxt += timedelta(days=1)
+        state, at = "not-today", None
+        if days is None or now.weekday() in days:
+            low, high = (due - timedelta(minutes=15)).timestamp() * 1000, (due + timedelta(hours=2)).timestamp() * 1000
+            hits = [t for t in times.get(ids.get(item["bot"], ""), []) if low <= t <= high]
+            if hits:
+                state, at = "done", iso_local(min(hits) / 1000)
+            elif now < due:
+                state = "upcoming"
+            elif now.timestamp() * 1000 > high:
+                state = "missed"
+            else:
+                state = "waiting"
+        out.append({**item, "state": state, "at": at, "next": nxt.isoformat(timespec="minutes")})
+    return out
+
+
 def build(config: BoxConfig | None = None) -> dict:
     """Collect internal box data. Raises ``BoxError`` or ``PrivacyError`` on failure."""
     config = config if config is not None else default_config()
-    now = datetime.now(SYDNEY)
+    now = datetime.now().astimezone()
     today = now.date()
     roster, groups = load_roster(config)
     roster_names = [bot["name"] for bot in roster]
+    extras = load_extras(config, roster_names)
+    aliases = extras["aliases"]
+    folders = resolve_folders(config, roster, extras)
+    dispatcher, dispatch_path = find_dispatcher(config, roster)
     known = set(roster_names)
-    patterns = compile_name_patterns(roster_names)
+    # Old names in old log lines still point at the bot they belong to.
+    patterns = compile_name_patterns(roster_names + list(aliases))
     willow_ids = {WILLOW_ID}
     for bot in roster:
         if is_willow(bot) and bot.get("id"):
@@ -743,8 +1095,8 @@ def build(config: BoxConfig | None = None) -> dict:
             measured.append(record)
             continue
 
-        folder = config.folder_map.get(name)
-        has_folder = folder is not None and not is_forbidden(folder, config) and folder.is_dir()
+        folder = folders.get(name)
+        has_folder = folder is not None
         record = {
             "name": name,
             "label": bot["label"],
@@ -760,6 +1112,8 @@ def build(config: BoxConfig | None = None) -> dict:
             "activity": 0,
             "share_pct": 0.0,
             "recent_tasks": [],
+            "logs": [],
+            "runs": None,
         }
         texts: list[tuple[str, str]] = []
         if has_folder:
@@ -773,15 +1127,17 @@ def build(config: BoxConfig | None = None) -> dict:
             for path in bot_log_paths(folder, config):
                 text = read_log(path, config)
                 texts.append((path.name, text))
+                record["logs"].append(path.name)
                 entries.extend(extract_entries(text))
                 log_lines += count_recent_log_lines(text, today)
+                record["runs"] = record["runs"] or log_runs(text)
             record["log_lines_7d"] = log_lines
             record["recent_tasks"] = list(reversed(entries[-TASK_LIMIT:]))
             for _fname, text in texts:
                 for line in text.splitlines():
                     if not line.strip():
                         continue
-                    for mentioned in names_in_text(line, patterns):
+                    for mentioned in {aliases.get(hit, hit) for hit in names_in_text(line, patterns)}:
                         if mentioned == name or mentioned not in known:
                             continue
                         edges[(name, mentioned, "mention")] += 1
@@ -789,7 +1145,6 @@ def build(config: BoxConfig | None = None) -> dict:
         bots_out.append(record)
         measured.append(record)
 
-    dispatch_path = config.dispatch_log
     dispatch_ready = False
     if not is_forbidden(dispatch_path, config):
         try:
@@ -806,13 +1161,14 @@ def build(config: BoxConfig | None = None) -> dict:
             cells = split_table_row(line)
             if not cells or len(cells) < 3:
                 continue
-            bot_cell = cells[2]
+            bot_cell = aliases.get(cells[2], cells[2])
             targets: list[str] = []
-            if bot_cell in known and bot_cell != "Grok Bot":
+            if bot_cell in known and bot_cell != dispatcher:
                 targets = [bot_cell]
             else:
                 for mentioned in names_in_text(bot_cell, patterns):
-                    if mentioned == "Grok Bot":
+                    mentioned = aliases.get(mentioned, mentioned)
+                    if mentioned == dispatcher:
                         continue
                     targets.append(mentioned)
             seen: set[str] = set()
@@ -820,7 +1176,7 @@ def build(config: BoxConfig | None = None) -> dict:
                 if target in seen:
                     continue
                 seen.add(target)
-                edges[("Grok Bot", target, "dispatch")] += 1
+                edges[(dispatcher, target, "dispatch")] += 1
 
     total_activity = sum(item["activity"] for item in measured)
     for item in measured:
@@ -876,9 +1232,20 @@ def build(config: BoxConfig | None = None) -> dict:
         }
         for item in ranking
     ]
+    ids = {bot["name"]: str(bot.get("id") or "") for bot in roster}
+    profiles = read_profiles(config, willow_ids)
+    for record in bots_out:
+        engine = profiles.get(str(record.get("id") or ""), {}).get("harness")
+        if engine and record["status"] != "不监控":
+            record["engine"] = engine
     payload = {
         "generated_at": now.isoformat(timespec="seconds"),
-        "timezone": "Australia/Sydney",
+        "timezone": now.tzname() or "",
+        "dispatcher": dispatcher,
+        "schedule": schedule_status(extras["schedule"], ids, config, now),
+        "deleted": extras["deleted"],
+        "changes": extras["changes"],
+        "aliases": len(aliases),
         "summary": {
             "text": summary_text,
             "active": counts.get("active", 0),

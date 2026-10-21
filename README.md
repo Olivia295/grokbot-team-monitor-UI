@@ -223,16 +223,25 @@ Bot Office can also run **inside the Grok Bot box** (the machine your bots work 
 | | Box reading (internal) | External reading (your computer) |
 | --- | --- | --- |
 | Where it runs | Inside the Grok Bot box | The computer with the Grok Bot app |
-| Bots and rooms | `/workspace/roster.md` (names, labels, duties, sidebar groups) | The app's roster and sidebar groups |
-| Handoffs | `search-index.db` messages (read-only) and `dispatch-log.md` | `toAgent` / `fromAgent` in cached transcripts |
+| Bots and rooms | `/workspace/roster.md` (names, labels, duties, sidebar groups) plus each bot's `profile.json` avatar and title | The app's roster and sidebar groups |
+| Handoffs | `search-index.db` messages (read-only), the dispatcher's 「她的原话 / 我的理解」 messages, and `dispatch-log.md` | `toAgent` / `fromAgent` in cached transcripts |
 | Coverage | Every bot in the message index, including ones you haven't opened lately | Bots whose transcripts the app has cached |
-| Extra panel | Work status from folder activity, recent tasks from each bot's log, mention/dispatch edges, an activity **estimate** | — |
+| Extra panel | Work status, recent tasks from every log the bot keeps, run tables (runs / retries / failures), the roster's push schedule checked against today's messages, the team change log, mention/dispatch edges, an activity **estimate** | — |
 | Weekly quota | Not available on the box (the panel says so) | **Real** percentage, plan and reset date |
 | Message text | Short handoff titles only (none for Willow Mage). Your own messages keep only time and recipient | Full text (hide it with privacy mode) |
 
 - **When it switches on**: internal reading is available when both `/workspace/roster.md` and `/home/box/agent-data` exist. `BOT_OFFICE_INTERNAL=1` forces it on and `=0` forces it off. With **Settings → Data source → Reading mode** on *Automatic*, the box is read whenever it's available. The header switch saves your choice for the page, alerts, the big screen and the menu-bar app together. Off the box, the internal option is disabled and `/api/internal` answers 403.
 - **What it never reads**: Notion Nexus `inbox` / `snapshots` / `raw`, `~/.codex`, `~/.grok`, `auth.json`, anything with `token` in its name, `*.env`, and files named 周记 / 日记. Willow Mage appears like the other bots but as work metadata only: whether she's working, when she was last active, how many messages, and whether a handoff to or from her was answered. Her message bodies are never selected from the index, her folder and duty text are never read, and anything she wrote or was sent shows as "(Willow content hidden)" everywhere, including alerts, replays, GIFs and reports. Other handoff titles that look personal are replaced with "(hidden)". The SQLite index is opened read-only (`mode=ro`).
 - **No demo stand-ins**: with no records yet, the box view says "No box collaboration records yet" instead of showing the demo team.
+
+**Everything comes from files the box already has**; the bots don't write anything extra for Bot Office:
+
+- **The roster drives the layout.** Its 旧名对照 table lets old names in old logs still match. Its shared-folder table says which folder is whose (otherwise the bot's name as a folder, e.g. `spaceship-copilot`), and its log table adds logs beyond `log.md`. Any `*-log.md` in a bot's folder is read too. The push schedule becomes a card that says, for today, whether each push went out (a reply from that bot near the time), is still to come, or was missed. Deleted bots and the change log are listed.
+- **Dispatches are recognised by their format.** A message written with 「她的原话」 / 「我的理解」 sections is a handoff from the dispatcher, the bot that keeps `dispatch-log.md`. Its title comes **only from 「我的理解」**: 「她的原话」 is your own words and is never shown.
+- **Status comes from the message timeline.** The platform doesn't record "working" or "waiting for you" on the box. So a bot whose last message is a reply in your main chat shows "replied to you, your turn". A bot that got a message and hasn't answered for 10+ minutes shows "got a message, no reply yet" and appears under Needs you. A transcript folder that changed seconds ago shows it working. Handoffs get pickup times, so the bottleneck view works in box mode too.
+- **Run tables count.** A log kept as a table with a result column plus rounds or retries (like CodexCodex's) is summarised as runs, retries, failures and average rounds.
+- **Times use the box's own clock** and timezone. The message index is only re-read when it (or its `-wal` file, where new messages land first) changes.
+- **Secrets stay closed.** Files whose names look like credentials are never opened: `*secret*`, `*cookie*`, `*token*`, `*password*`, `auth.json`, `*.env`, keys. Neither is any agent's `store.db`. An `inbox` / `snapshots` / `raw` folder is closed in every bot folder, not just Notion Nexus's. If Bot Office's own settings file sits inside `/workspace`, where every bot can read its webhook secrets, the panel and the settings page say so. Set `GROK_COLLAB_SETTINGS=~/.config/bot-office/settings.json` to move it.
 
 ### Opening the box's office from elsewhere
 

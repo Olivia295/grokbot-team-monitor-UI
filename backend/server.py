@@ -30,7 +30,7 @@ FRONTEND = ROOT / "frontend"
 try:  # installed package (pipx, uvx, Homebrew) or python -m backend.server
     from .alerts import AlertWatcher
     from .events import append_events
-    from .internal_box import BoxError, PrivacyError, build, mode_status
+    from .internal_box import BoxError, PrivacyError, DEFAULT_WORKSPACE, build, mode_status
     from .settings import SettingsError, load_settings, save_settings, settings_path
     from .views import flows_view, ingest_path, insights_view, office_view, use_box
 except ImportError:  # python3 backend/server.py from a checkout
@@ -38,7 +38,7 @@ except ImportError:  # python3 backend/server.py from a checkout
         sys.path.insert(0, str(ROOT))
     from backend.alerts import AlertWatcher
     from backend.events import append_events
-    from backend.internal_box import BoxError, PrivacyError, build, mode_status
+    from backend.internal_box import BoxError, PrivacyError, DEFAULT_WORKSPACE, build, mode_status
     from backend.settings import SettingsError, load_settings, save_settings, settings_path
     from backend.views import flows_view, ingest_path, insights_view, office_view, use_box
 
@@ -54,6 +54,14 @@ TOKEN_PAGE = """<!doctype html><meta charset="utf-8"><meta name="viewport" conte
 <p>This address is not this computer, so Bot Office asks for its access link. Open the link with <code>?token=…</code>
 that the server printed when it started.</p>
 <p>这个地址不是本机，需要访问链接才能打开。请使用后台启动时打印出来、带 <code>?token=…</code> 的链接。</p></body>"""
+
+
+def settings_in_workspace() -> bool:
+    """True when settings (webhook URLs, signing secrets) sit inside the box's shared /workspace,
+    where every bot can read them."""
+    path = os.path.realpath(settings_path())
+    workspace = os.path.realpath(str(DEFAULT_WORKSPACE))
+    return path == workspace or path.startswith(workspace + os.sep)
 
 
 def allowed_hosts() -> set[str]:
@@ -172,7 +180,8 @@ class Handler(BaseHTTPRequestHandler):
                 settings = load_settings()
                 status = mode_status()
                 status.update(setting=settings.get("readMode", "auto"),
-                              mode="internal" if use_box(settings, None) else "external")
+                              mode="internal" if use_box(settings, None) else "external",
+                              settingsInWorkspace=bool(status["internal_available"]) and settings_in_workspace())
                 self._json(status)
             elif path == "/api/internal":
                 self._internal()
@@ -273,6 +282,7 @@ class Handler(BaseHTTPRequestHandler):
         except (BoxError, PrivacyError, OSError, ValueError):
             self._json({"error": "internal data unavailable"}, status=500)
             return
+        payload["settingsInWorkspace"] = settings_in_workspace()
         self._json(payload)
 
     def _html(self, status: int, body: str) -> None:
@@ -319,6 +329,9 @@ def main() -> None:
     mode = "  (demo)" if args.demo else f"  (events: {os.environ['GROK_COLLAB_EVENTS']})" if args.events else ""
     print(f"Bot Office {VERSION}  {url}{mode}", flush=True)
     print("Press Ctrl+C to stop.", flush=True)
+    if mode_status()["internal_available"] and settings_in_workspace():
+        print(f"Note: settings are in {settings_path()}, inside /workspace where every bot can read them. "
+              "Set GROK_COLLAB_SETTINGS=~/.config/bot-office/settings.json to keep webhook secrets private.", flush=True)
     for name in sorted(allowed_hosts()):
         print(f"Also allowed as {name}. Open it once with ?token={TOKEN} (it is kept as a cookie).", flush=True)
     WATCHER.base_url = url

@@ -76,6 +76,12 @@ function renderReadMode() {
   $("#read-mode-hint").textContent = available
     ? t("set.readModeOn", { mode: t(boxMode.mode === "internal" ? "mode.internal" : "mode.external") })
     : t("mode.unavailable");
+  // On the box, a settings file inside /workspace is readable by every bot.
+  const warning = $("#settings-warning");
+  if (warning) {
+    warning.hidden = !boxMode?.settingsInWorkspace;
+    warning.textContent = t("internal.settingsWarning");
+  }
 }
 function renderSource() {
   const node = $("#source-status");

@@ -140,10 +140,49 @@ function tasksCell(bot) {
     return `<span class="muted">${esc(t("willow.count", { n: bot.message_count ?? 0 }))} · ${esc(result)} · ${esc(t("willow.hidden"))}</span>`;
   }
   if (bot.status === "不监控" || bot.status === "no-folder") return '<span class="muted">—</span>';
+  const runs = bot.runs
+    ? `<div class="runs-line">${esc(t("internal.runs", { runs: bot.runs.runs, retries: bot.runs.retries, failures: bot.runs.failures }))}${bot.runs.avg_rounds != null ? ` · ${esc(t("internal.rounds", { n: bot.runs.avg_rounds }))}` : ""}</div>`
+    : "";
   const tasks = bot.recent_tasks || [];
-  if (!tasks.length) return `<span class="muted">${esc(t("internal.tasks.none"))}</span>`;
+  if (!tasks.length) return `${runs}<span class="muted">${esc(t("internal.tasks.none"))}</span>`;
   const items = tasks.map((task) => `<li>${esc(task)}</li>`).join("");
-  return `<details><summary>${esc(t("internal.tasks.count", { n: tasks.length }))}</summary><ul>${items}</ul></details>`;
+  const logs = (bot.logs || []).length ? ` title="${esc(t("internal.logsRead", { files: bot.logs.join("、") }))}"` : "";
+  return `${runs}<details${logs}><summary>${esc(t("internal.tasks.count", { n: tasks.length }))}</summary><ul>${items}</ul></details>`;
+}
+
+const SCHEDULE_STATES = { done: "active", waiting: "recent", upcoming: "idle", missed: "missed", "not-today": "no-folder" };
+function scheduleCard(data) {
+  const items = data.schedule || [];
+  if (!items.length) return "";
+  const head = ["time", "bot", "what", "today", "next"].map((key) => `<th>${esc(t(`internal.sched.${key}`))}</th>`).join("");
+  const rows = items.map((item) => {
+    const next = String(item.next || "").replace("T", " ").slice(5, 16);
+    const at = item.at ? ` ${String(item.at).slice(11, 16)}` : "";
+    return `<tr><td class="num">${esc(item.time)}</td><td class="name">${esc(item.bot)}</td><td>${esc(item.what || "—")}</td>
+      <td><span class="st-badge ${SCHEDULE_STATES[item.state] || "idle"}">${esc(t(`internal.sched.${item.state}`))}${esc(at)}</span></td><td>${esc(next)}</td></tr>`;
+  }).join("");
+  return `<article class="card internal-card">
+    <h3>${esc(t("internal.sched.title"))}</h3>
+    <p class="muted">${esc(t("internal.sched.note"))}</p>
+    <div class="table-scroll"><table class="internal-table compact"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>
+  </article>`;
+}
+
+function changesCard(data) {
+  const changes = data.changes || [];
+  const deleted = data.deleted || [];
+  if (!changes.length && !deleted.length) return "";
+  const list = changes.map((item) => `<li><time>${esc(item.date || "—")}</time><span>${esc(item.text)}</span></li>`).join("");
+  return `<article class="card internal-card">
+    <h3>${esc(t("internal.changes.title"))}</h3>
+    ${list ? `<ul class="change-list">${list}</ul>` : ""}
+    ${deleted.length ? `<p class="muted">${esc(t("internal.deleted", { names: deleted.join("、") }))}</p>` : ""}
+  </article>`;
+}
+
+function settingsWarning(data) {
+  if (!data.settingsInWorkspace) return "";
+  return `<div class="quota-banner"><span class="quota-mark" aria-hidden="true">!</span><span>${esc(t("internal.settingsWarning"))}</span></div>`;
 }
 
 function summaryCard(data) {
@@ -178,7 +217,7 @@ function tableCard(data) {
     const dutyTip = bot.name === "Willow Mage" || !bot.duty ? "" : ` title="${esc(bot.duty)}"`;
     return `<tr>
       <td class="name"${dutyTip}>${esc(bot.name)}</td>
-      <td>${esc(bot.label || "—")}</td>
+      <td>${esc(bot.label || "—")}${bot.engine ? ` <span class="engine-tag">${esc(bot.engine)}</span>` : ""}</td>
       <td>${esc(bot.group || "—")}</td>
       <td><span class="st-badge ${esc(statusClass(bot.status))}">${esc(statusLabel(bot.status))}</span></td>
       <td>${esc(last)}</td>
@@ -271,7 +310,8 @@ function renderInternal() {
     return;
   }
   if (stamp) stamp.textContent = formatGenerated(S.internal.generated_at, S.internal.timezone);
-  body.innerHTML = summaryCard(S.internal) + tableCard(S.internal)
+  body.innerHTML = settingsWarning(S.internal) + summaryCard(S.internal) + tableCard(S.internal)
+    + `<div class="internal-split">${scheduleCard(S.internal)}${changesCard(S.internal)}</div>`
     + `<div class="internal-split">${edgesCard(S.internal)}${usageCard(S.internal)}</div>`;
 }
 

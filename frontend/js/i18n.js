@@ -355,3 +355,26 @@ Object.assign(I18N.en, {
   "set.overlayHint": "In OBS, add a Browser source with the overlay URL. The background is transparent and only the studio stage shows. Add &view=stars or &view=track for another view.",
   "about.static": "This is the online demo: settings are only saved in this browser. To see your own bots, run Bot Office on your machine.",
 });
+
+Object.assign(I18N.zh, {
+  "detail.yourturn": "回复了你，轮到你了", "detail.pending": "收到消息，还没回复",
+  "attn.pending": "{name} 收到消息很久了，还没回复",
+  "internal.runs": "运行 {runs} 次 · 重来 {retries} · 失败 {failures}", "internal.rounds": "平均 {n} 轮",
+  "internal.logsRead": "读取的日志：{files}",
+  "internal.sched.title": "推送时间表", "internal.sched.note": "来自名册的推送时间表；对照消息记录看今天推了没有。",
+  "internal.sched.time": "时间", "internal.sched.bot": "bot", "internal.sched.what": "推什么", "internal.sched.today": "今天", "internal.sched.next": "下一次",
+  "internal.sched.done": "已推送", "internal.sched.waiting": "等待中", "internal.sched.upcoming": "还没到", "internal.sched.missed": "没推", "internal.sched.not-today": "今天没有",
+  "internal.changes.title": "团队改动记录", "internal.deleted": "已删除：{names}",
+  "internal.settingsWarning": "Bot协作室的设置文件放在 /workspace 里，所有 bot 都能读到里面的 Webhook 地址和密钥。建议用 GROK_COLLAB_SETTINGS=~/.config/bot-office/settings.json 把它挪出去。",
+});
+Object.assign(I18N.en, {
+  "detail.yourturn": "Replied to you, your turn", "detail.pending": "Got a message, no reply yet",
+  "attn.pending": "{name} got a message a while ago and hasn't replied",
+  "internal.runs": "{runs} runs · {retries} retries · {failures} failed", "internal.rounds": "avg {n} rounds",
+  "internal.logsRead": "Logs read: {files}",
+  "internal.sched.title": "Push schedule", "internal.sched.note": "From the roster's push schedule, checked against the message log for today.",
+  "internal.sched.time": "Time", "internal.sched.bot": "Bot", "internal.sched.what": "What", "internal.sched.today": "Today", "internal.sched.next": "Next",
+  "internal.sched.done": "Sent", "internal.sched.waiting": "Waiting", "internal.sched.upcoming": "Later today", "internal.sched.missed": "Missed", "internal.sched.not-today": "Not today",
+  "internal.changes.title": "Team change log", "internal.deleted": "Deleted: {names}",
+  "internal.settingsWarning": "Bot Office's settings file is inside /workspace, where every bot can read its webhook URLs and secrets. Move it out with GROK_COLLAB_SETTINGS=~/.config/bot-office/settings.json.",
+});

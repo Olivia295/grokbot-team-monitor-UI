@@ -270,6 +270,7 @@ function renderAttention() {
     if (agent.detail === "awaiting") items.push({ id: agent.id, icon: "💬", text: t("attn.awaiting", { name: agent.name }), weight: 3 });
     if (agent.state === "error") items.push({ id: agent.id, icon: "⚠️", text: t("attn.error", { name: agent.name }), weight: 4 });
     if (agent.unreadCount > 0) items.push({ id: agent.id, icon: "🔔", text: t("attn.unread", { name: agent.name, n: agent.unreadCount }), weight: 2 });
+    if (agent.detail === "pending") items.push({ id: agent.id, icon: "⏳", text: t("attn.pending", { name: agent.name }), weight: 1 });
   }
   const stuck = (S.flows?.flows || []).filter((flow) => flow.active && Date.now() - flow.startedAt > 15 * 60e3);
   for (const flow of stuck) items.push({ flow: flow.id, icon: "⏳", text: t("attn.long", { what: cut(flowAsk(flow), 24) }), weight: 1 });

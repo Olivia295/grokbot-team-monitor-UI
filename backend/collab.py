@@ -143,6 +143,9 @@ def office_from(cache: Cache, now_ms: int) -> dict:
         row = visible[agent_id]
         entries, mtime = cache.transcript(agent_id)
         state, detail, param, handoff = _derive(now_ms, row.get("awaitingUserResponse"), entries, mtime)
+        # Box reading has no explicit "waiting" flag; the message timeline gives a hint instead.
+        if state == "idle" and detail == "idle" and row.get("statusHint") in ("yourturn", "pending"):
+            detail = row["statusHint"]
         snippet = _last_snippet(entries)
         agents.append({
             "id": agent_id,
@@ -311,9 +314,11 @@ def flows_from(cache: Cache, now_ms: int, hours: int = 24) -> dict:
             continue
         steps: list[dict] = []
         for marker in orphan_ins:
+            # Only the receiver's copy exists (box reading): its first answer is the pickup time.
+            wait = turn["firstOut"] - marker["at"] if turn["firstOut"] and turn["firstOut"] >= marker["at"] else None
             steps.append({"kind": "handoff", "from": marker["from"], "to": marker["to"], "at": marker["at"],
                           "text": marker["text"], "traced": True, "depth": 0,
-                          "replied": bool(turn.get("replied"))})
+                          "replied": bool(turn.get("replied")), "waitMs": wait, "failed": bool(turn["errors"])})
         seen: set = set()
         walk(key, steps, seen)
         order = {id(step): index for index, step in enumerate(steps)}
