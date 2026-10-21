@@ -77,13 +77,14 @@ def resolve_cache(settings: dict, now_ms: int, box: bool | None = None) -> Cache
         return events_cache(events_path(settings) or ingest_path(settings), now_ms)
     cache = load_cache(default_support_dir(settings.get("supportDir", "")))
     if source == "auto" and not cache.roster:
-        # No Grok Bot here: try an event log (configured, or what POST /api/events wrote), then the demo.
+        # No Grok Bot here: try an event log (configured, or what POST /api/events wrote).
         for path in (events_path(settings), ingest_path(settings)):
             if path is not None and event_files(path):
                 events = events_cache(path, now_ms)
                 if events.roster:
                     return events
-        return demo_cache(now_ms, language)
+        # Nothing real to show: an empty office that says so. The demo team only appears when
+        # someone asks for it (--demo, or Settings → Data source → Demo).
     return cache
 
 
@@ -95,6 +96,7 @@ def _source(cache: Cache) -> dict:
         "empty": bool(cache.box and cache.empty),
         "supportDir": "" if cache.demo else str(cache.support),
         "found": bool(cache.roster),
+        "dataAt": int(cache.data_at or 0),
     }
 
 

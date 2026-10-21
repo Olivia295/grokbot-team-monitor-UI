@@ -11,7 +11,7 @@ curl -X POST http://127.0.0.1:19200/api/events -H 'Content-Type: application/jso
   -d '{"type":"handoff","from":"planner","to":"coder","text":"Fix the login bug","run":"r42"}'
 ```
 
-You can also pick **Settings → Data source → Event log** and paste the path there. With the source set to **Auto**, Bot Office uses Grok Bot if it finds Grok Bot data, then your event log, then the demo team.
+You can also pick **Settings → Data source → Event log** and paste the path there. With the source set to **Auto**, Bot Office uses Grok Bot if it finds Grok Bot data, then your event log, and otherwise shows an empty office that says nothing was found.
 
 ## Events
 

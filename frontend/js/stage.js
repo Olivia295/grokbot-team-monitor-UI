@@ -757,15 +757,9 @@ function enterHop() {
 function enterHold() {
   const { step } = beat;
   react(step.to, "catch");
-  if (step.kind === "visit") {
-    say(step.from, step.lines[0], step.to);
-    say(step.to, step.lines[1], step.from);
-  } else {
-    if (step.from !== "automation") say(step.from, speakLine(step.text, step.from), step.to);
-    const acks = tList("speech.acks");
-    const ack = step.kind === "reply" ? t("speech.thanks") : step.from === "automation" ? t("speech.alarm") : acks[Math.abs(Math.round(step.at || 0)) % acks.length];
-    say(step.to, ack, step.from);
-  }
+  // Bubbles only carry what was recorded: the real message (or its count), never a made-up line.
+  if (step.kind === "visit") say(step.from, `🤝 ×${step.count}`, step.to);
+  else if (step.from !== "automation") say(step.from, speakLine(step.text, step.from), step.to);
   beat.onHold?.();
 }
 function tickBeat(delta) {
@@ -954,9 +948,7 @@ function partnerVisit() {
   const [key, count] = ranked[ambient.visitIndex++ % ranked.length];
   let [a, b] = key.split("|");
   if (isBusy(agentOf(a)) && !isBusy(agentOf(b))) [a, b] = [b, a];
-  const chats = tList("speech.chats");
-  const lines = chats[(ambient.visitIndex + count) % chats.length];
-  return { kind: "visit", from: a, to: b, at: Date.now(), text: "", lines, count, depth: 0 };
+  return { kind: "visit", from: a, to: b, at: Date.now(), text: "", count, depth: 0 };
 }
 function tickAmbient(now) {
   if (S.replay || document.hidden || S.view === "track") return;

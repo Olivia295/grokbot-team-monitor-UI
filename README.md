@@ -110,7 +110,7 @@ Bot Office looks for Grok Bot's data here:
 | Windows | `%APPDATA%\Grok Bot` |
 | Linux | `~/.config/Grok Bot` |
 
-If yours lives elsewhere, set it in **Settings → Data source** or with the `GROK_BOT_SUPPORT` environment variable. When no data is found, the page uses an event log if you have one, and otherwise switches to demo mode and says so at the top.
+If yours lives elsewhere, set it in **Settings → Data source** or with the `GROK_BOT_SUPPORT` environment variable. When no data is found, the page uses an event log if you have one; otherwise it stays empty and says so at the top. The demo team only appears when you ask for it (`--demo`, or Settings → Data source → Demo).
 
 ## Features
 
@@ -226,13 +226,14 @@ Bot Office can also run **inside the Grok Bot box** (the machine your bots work 
 | Bots and rooms | `/workspace/roster.md` (names, labels, duties, sidebar groups) | The app's roster and sidebar groups |
 | Handoffs | `search-index.db` messages (read-only) and `dispatch-log.md` | `toAgent` / `fromAgent` in cached transcripts |
 | Coverage | Every bot in the message index, including ones you haven't opened lately | Bots whose transcripts the app has cached |
-| Extra panel | Work status from folder activity, recent tasks from each bot's log, mention/dispatch edges, an activity **estimate** | — |
+| Extra panel | Work status from folder activity, recent tasks from each bot's log, mention/dispatch edges, **real** 7-day message counts per bot from the message index | — |
 | Weekly quota | Not available on the box (the panel says so) | **Real** percentage, plan and reset date |
 | Message text | Short handoff titles only. Your own messages keep only time and recipient | Full text (hide it with privacy mode) |
 
 - **When it switches on**: internal reading is available when both `/workspace/roster.md` and `/home/box/agent-data` exist. `BOT_OFFICE_INTERNAL=1` forces it on and `=0` forces it off. With **Settings → Data source → Reading mode** on *Automatic*, the box is read whenever it's available. The header switch saves your choice for the page, alerts, the big screen and the menu-bar app together. Off the box, the internal option is disabled and `/api/internal` answers 403.
 - **What it never reads**: Notion Nexus `inbox` / `snapshots` / `raw`, `~/.codex`, `~/.grok`, `auth.json`, anything with `token` in its name, `*.env`, and files named 周记 / 日记. Willow Mage shows only its name and "not monitored". Handoff titles that look personal are replaced with "(hidden)". The SQLite index is opened read-only (`mode=ro`).
 - **No demo stand-ins**: with no records yet, the box view says "No box collaboration records yet" instead of showing the demo team.
+- **Always labelled**: the header pill says how the page is reading, *Internal · Grok Bot box*, *External · Grok Bot app*, *External · event log* or *Demo data · not real*, and the footer says when the data last changed. Anything a mode can't measure shows "—" or is hidden, never a made-up 0, and speech bubbles only show recorded messages.
 
 ### Opening the box's office from elsewhere
 
@@ -350,9 +351,9 @@ There is no build step for the app itself: edit and refresh. GitHub Actions runs
 ## FAQ
 
 <details>
-<summary><b>The page says "Demo data"</b></summary>
+<summary><b>The page says "External · no data found"</b></summary>
 
-No Grok Bot cache (and no event log) was found. Open Grok Bot and sign in once, set the folder in Settings → Data source, or point Bot Office at an event log.
+No Grok Bot cache (and no event log) was found, so the office stays empty instead of showing made-up data. Open Grok Bot and sign in once, set the folder in Settings → Data source, or point Bot Office at an event log. To look around first, pick Demo in Settings → Data source.
 </details>
 
 <details>

@@ -512,4 +512,10 @@ def load_box_cache(config: BoxConfig | None = None) -> Cache:
     cache.box = True
     cache.demo = False
     cache.empty = not _has_records(transcripts)
+    # Freshness: the index (new rows land in -wal first), the roster and the dispatch log.
+    for path in (db_path, Path(str(db_path) + "-wal"), config.roster_path, config.dispatch_log):
+        try:
+            cache.data_at = max(cache.data_at, int(path.stat().st_mtime * 1000))
+        except OSError:
+            pass
     return cache

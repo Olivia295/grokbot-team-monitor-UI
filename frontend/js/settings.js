@@ -96,9 +96,11 @@ function renderSource() {
   if (source.kind !== "events") $("#supportDir").placeholder = source.supportDir || t("set.folderAuto");
   node.innerHTML = source.demo
     ? `🧪 ${esc(t(STATIC ? "set.statusStatic" : "set.statusDemo"))}`
-    : source.kind === "events"
-      ? `🔌 ${esc(t("set.statusEvents", { n: office.roster.length, path: source.supportDir }))}`
-      : `✅ ${esc(t("set.statusGrok", { n: office.roster.length, path: source.supportDir }))}`;
+    : !source.found
+      ? `⚪ ${esc(t("set.statusNone"))}`
+      : source.kind === "events"
+        ? `🔌 ${esc(t("set.statusEvents", { n: office.roster.length, path: source.supportDir }))}`
+        : `✅ ${esc(t("set.statusGrok", { n: office.roster.length, path: source.supportDir }))}`;
 }
 
 // ---------------------------------------------------------------- alerts

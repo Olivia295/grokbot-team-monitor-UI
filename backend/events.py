@@ -252,6 +252,11 @@ def events_cache(path: Path, now_ms: int | None = None) -> Cache:
     cache.transcripts = {bot_id: (entries, last) for bot_id, entries in transcripts.items()}
     cache.source = "events"
     cache.online = bool(last) and now_ms - last <= ONLINE_MS
+    for file in event_files(path):
+        try:
+            cache.data_at = max(cache.data_at, int(file.stat().st_mtime * 1000))
+        except OSError:
+            pass
     return cache
 
 

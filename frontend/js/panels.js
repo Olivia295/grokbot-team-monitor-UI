@@ -14,8 +14,10 @@ function renderHero() {
   const busy = office.agents.filter(isBusy);
   $("#greeting").textContent = `${greeting()} · ${t("hero.count", { n: office.agents.length })}`;
   const live = flows?.activeCount || 0;
-  $("#hero-title").innerHTML = live ? t(live === 1 ? "hero.liveOne" : "hero.live", { n: `<em>${live}</em>` }) : busy.length ? esc(t(busy.length === 1 ? "hero.busyOne" : "hero.busy", { n: busy.length })) : esc(t("hero.idle"));
-  $("#tiles").innerHTML = [
+  const found = office.source?.found || office.source?.demo;
+  $("#hero-title").innerHTML = !found ? esc(t("hero.none")) : live ? t(live === 1 ? "hero.liveOne" : "hero.live", { n: `<em>${live}</em>` }) : busy.length ? esc(t(busy.length === 1 ? "hero.busyOne" : "hero.busy", { n: busy.length })) : esc(t("hero.idle"));
+  // Nothing found means nothing measured: show "—", never a made-up 0.
+  const tiles = [
     [flows?.flowCount ?? "—", t("tile.flows", { window: windowLabel(S.hours) })],
     [flows?.handoffCount ?? "—", t("tile.handoffs")],
     [totals ? number(totals.replies) : "—", t("tile.replies")],
@@ -23,7 +25,8 @@ function renderHero() {
     office.source?.box
       ? [totals ? number(totals.hours.reduce((a, b) => a + b, 0)) : "—", t("tile.outputs")]
       : [totals ? number(totals.chars) : "—", t("tile.chars")],
-  ].map(([value, text]) => `<div class="tile"><b>${value}</b><span>${esc(text)}</span></div>`).join("");
+  ];
+  $("#tiles").innerHTML = tiles.map(([value, text]) => [found ? value : "—", text]).map(([value, text]) => `<div class="tile"><b>${value}</b><span>${esc(text)}</span></div>`).join("");
   renderHeroArt();
   const usage = office.usage;
   if (usage) {

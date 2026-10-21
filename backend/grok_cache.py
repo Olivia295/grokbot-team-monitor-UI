@@ -73,6 +73,8 @@ class Cache:
     # is no collaboration record to show, so the page must not invent a demo team.
     box: bool = False
     empty: bool = False
+    # When the underlying data last changed (ms), so the page can say how fresh it is.
+    data_at: int = 0
     transcripts: dict[str, tuple[list[dict], int]] = field(default_factory=dict)
 
     def transcript(self, agent_id: str) -> tuple[list[dict], int]:
@@ -120,6 +122,10 @@ def load_cache(support: Path | None = None) -> Cache:
     for key, path, payload in blobs:
         if scoped and ".account." in key and scoped not in key:
             continue
+        try:
+            cache.data_at = max(cache.data_at, int(path.stat().st_mtime * 1000))
+        except OSError:
+            pass
         value = _value(payload)
         if not isinstance(value, dict):
             continue

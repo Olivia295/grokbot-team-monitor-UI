@@ -25,9 +25,11 @@ from __future__ import annotations
 
 import os
 import re
+import sqlite3
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 try:
@@ -41,7 +43,8 @@ TASK_CHARS = 160
 ENV_OVERRIDE = "BOT_OFFICE_INTERNAL"
 UNMONITORED = "Willow Mage"
 USAGE_NOTE = "无真实限额/用量数据"
-ESTIMATE_LABEL = "估算：按最近7天日志条目数与文件改动数，不是真实额度消耗"
+COUNTS_LABEL = "近 7 天消息数：来自消息索引的真实计数（bot 发出的条数）"
+WILLOW_ID = "0aae13ef-b790-4061-a6e8-1dc6d5e45803"
 
 DEFAULT_WORKSPACE = Path("/workspace")
 DEFAULT_ROSTER = Path("/workspace/roster.md")
@@ -548,16 +551,16 @@ def render_summary(now: datetime, counts: Counter, top_activity: list[dict], top
     stamp = now.strftime("%Y-%m-%d %H:%M")
     sentences = [
         (
-            f"截至 {stamp}（悉尼）：活跃 {counts.get('active', 0)} 个，"
-            f"近期 {counts.get('recent', 0)} 个，空闲 {counts.get('idle', 0)} 个"
+            f"截至 {stamp}（悉尼）：文件今天有改动的 {counts.get('active', 0)} 个，"
+            f"3 天内有改动的 {counts.get('recent', 0)} 个，更早的 {counts.get('idle', 0)} 个"
             f"；另有无文件夹 {counts.get('no-folder', 0)} 个，不监控 {counts.get('不监控', 0)} 个。"
         )
     ]
     if top_activity:
-        bits = "、".join(f"{item['name']}（{item['activity']}）" for item in top_activity)
-        sentences.append(f"估算活跃度前三：{bits}。")
+        bits = "、".join(f"{item['name']}（{item['activity']} 条）" for item in top_activity)
+        sentences.append(f"近 7 天发消息最多：{bits}。")
     else:
-        sentences.append("近 7 天没有可计入的估算活动。")
+        sentences.append("近 7 天消息索引里没有 bot 发出的消息。")
     if top_pairs:
         parts = []
         for pair in top_pairs:
@@ -571,7 +574,7 @@ def render_summary(now: datetime, counts: Counter, top_activity: list[dict], top
         sentences.append("协作较多：" + "、".join(parts) + "。")
     else:
         sentences.append("暂无协作记录。")
-    sentences.append("无真实限额/用量数据，上面的活跃度只是估算。")
+    sentences.append("这台电脑上没有额度/用量数据。")
     return "".join(sentences)
 
 
@@ -583,8 +586,8 @@ def validate(payload: dict) -> None:
         raise BoxError("usage.available must be false")
     if usage.get("note") != USAGE_NOTE:
         raise BoxError("usage.note mismatch")
-    if usage.get("estimate_label") != ESTIMATE_LABEL:
-        raise BoxError("estimate label mismatch")
+    if usage.get("counts_label") != COUNTS_LABEL:
+        raise BoxError("counts label mismatch")
     willow = [bot for bot in payload["bots"] if bot.get("name") == UNMONITORED]
     if len(willow) != 1:
         raise BoxError("Willow Mage record missing")
@@ -605,12 +608,39 @@ def validate(payload: dict) -> None:
                 raise BoxError(f"task exceeds {TASK_CHARS} chars for {bot['name']}")
         if bot["name"] == "Dr Eggbot" and bot.get("status") != "no-folder":
             raise BoxError("Dr Eggbot should be no-folder")
-    for estimate in usage["estimates"]:
-        if estimate["name"] == UNMONITORED:
-            raise BoxError("Willow Mage must not be in the estimate")
-        expected = estimate["log_lines_7d"] + estimate["files_modified_7d"]
-        if estimate["activity"] != expected:
-            raise BoxError(f"activity mismatch for {estimate['name']}")
+    for row in usage["counts"]:
+        if row["name"] == UNMONITORED:
+            raise BoxError("Willow Mage must not be counted")
+        for key in ("messages_7d", "received_7d"):
+            if not isinstance(row[key], int) or row[key] < 0:
+                raise BoxError(f"bad {key} for {row['name']}")
+
+
+def _sqlite_ro_uri(path: Path) -> str:
+    """``file:...?mode=ro`` so SQLite can neither create nor write the index."""
+    return "file:" + quote(Path(path).resolve().as_posix(), safe="/:") + "?mode=ro"
+
+
+def message_counts(config: BoxConfig, since_ms: int, skip_ids: set[str]) -> dict[str, dict[str, int]]:
+    """Messages per agent and role since ``since_ms``: counts only, the body is never selected."""
+    db_path = config.agent_data / "search-index.db"
+    if is_forbidden(db_path, config) or not db_path.is_file():
+        return {}
+    try:
+        conn = sqlite3.connect(_sqlite_ro_uri(db_path), uri=True)
+    except sqlite3.Error:
+        return {}
+    found: dict[str, dict[str, int]] = defaultdict(dict)
+    try:
+        for agent_id, role, count in conn.execute(
+                "SELECT agent_id, role, COUNT(*) FROM messages WHERE timestamp_ms >= ? GROUP BY agent_id, role", (since_ms,)):
+            if str(agent_id) not in skip_ids:
+                found[str(agent_id)][str(role)] = int(count)
+    except sqlite3.Error:
+        return {}
+    finally:
+        conn.close()
+    return found
 
 
 def build(config: BoxConfig | None = None) -> dict:
@@ -685,7 +715,8 @@ def build(config: BoxConfig | None = None) -> dict:
                         if mentioned not in known:
                             continue
                         edges[(name, mentioned, "mention")] += 1
-        record["activity"] = record["log_lines_7d"] + record["files_modified_7d"]
+        # Real counts from the message index (filled in below), never an estimate.
+        record["messages_7d"] = record["received_7d"] = 0
         bots_out.append(record)
         measured.append(record)
 
@@ -722,6 +753,12 @@ def build(config: BoxConfig | None = None) -> dict:
                 seen.add(target)
                 edges[("Grok Bot", target, "dispatch")] += 1
 
+    sent = message_counts(config, int((now.timestamp() - WINDOW_DAYS * 86400) * 1000), {WILLOW_ID})
+    for item in measured:
+        found = sent.get(str(item.get("id") or ""), {})
+        item["messages_7d"] = found.get("assistant", 0)
+        item["received_7d"] = found.get("user", 0)
+        item["activity"] = item["messages_7d"]
     total_activity = sum(item["activity"] for item in measured)
     for item in measured:
         if total_activity <= 0:
@@ -764,14 +801,13 @@ def build(config: BoxConfig | None = None) -> dict:
 
     counts = Counter(bot.get("status") for bot in bots_out)
     summary_text = render_summary(now, counts, top_activity, top_pairs)
-    estimates = [
+    message_rows = [
         {
             "name": item["name"],
             "label": item["label"],
             "group": item["group"],
-            "log_lines_7d": item["log_lines_7d"],
-            "files_modified_7d": item["files_modified_7d"],
-            "activity": item["activity"],
+            "messages_7d": item["messages_7d"],
+            "received_7d": item["received_7d"],
             "share_pct": item["share_pct"],
         }
         for item in ranking
@@ -795,8 +831,8 @@ def build(config: BoxConfig | None = None) -> dict:
         "usage": {
             "available": False,
             "note": USAGE_NOTE,
-            "estimate_label": ESTIMATE_LABEL,
-            "estimates": estimates,
+            "counts_label": COUNTS_LABEL,
+            "counts": message_rows,
         },
     }
     validate(payload)

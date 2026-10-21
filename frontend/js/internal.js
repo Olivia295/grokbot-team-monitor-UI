@@ -1,4 +1,4 @@
-// Internal box panel: on-disk bot status, collaboration and an estimate chart.
+// Internal box panel: on-disk bot status, collaboration and real message counts.
 // External mode leaves this hidden. The choice is saved as the readMode setting on the
 // server, so alerts, the big screen and every open page read the same source.
 
@@ -214,17 +214,13 @@ function usageCard(data) {
   const note = usage.note || t("internal.usage.none");
   const english = S.lang === "en" && note !== t("internal.usage.none")
     ? `<span class="quota-en">${esc(t("internal.usage.none"))}</span>` : "";
-  const estimates = usage.estimates || [];
-  const max = estimates.reduce((peak, item) => Math.max(peak, item.activity || 0), 0);
-  const bars = estimates.length
-    ? estimates.map((item) => {
-      const width = !item.activity || !max ? 0 : Math.max(2, Math.min(100, Math.round(100 * item.activity / max)));
-      const meta = t("internal.bar", {
-        activity: item.activity ?? 0,
-        share: item.share_pct ?? 0,
-        logs: item.log_lines_7d ?? 0,
-        files: item.files_modified_7d ?? 0,
-      });
+  const counts = usage.counts || [];
+  const max = counts.reduce((peak, item) => Math.max(peak, item.messages_7d || 0), 0);
+  const bars = counts.length
+    ? counts.map((item) => {
+      const sent = item.messages_7d || 0;
+      const width = !sent || !max ? 0 : Math.max(2, Math.min(100, Math.round(100 * sent / max)));
+      const meta = t("internal.bar", { sent, received: item.received_7d || 0 });
       return `<div class="bar-row">
         <div class="bar-name">${esc(item.name)}</div>
         <div class="bar-track" role="presentation"><div class="bar-fill" style="width:${width}%"></div></div>
@@ -232,14 +228,12 @@ function usageCard(data) {
       </div>`;
     }).join("")
     : `<p class="muted">${esc(t("internal.edges.none"))}</p>`;
-  const chartLabel = `${t("internal.estimate")}. ${usage.estimate_label || t("internal.estimate.hint")}`;
+  const label = S.lang === "en" ? t("internal.counts.hint") : (usage.counts_label || t("internal.counts.hint"));
   return `<article class="card internal-card">
     <h3>${esc(t("internal.usage"))}</h3>
     <div class="quota-banner"><span class="quota-mark" aria-hidden="true">!</span><strong>${esc(note)}</strong>${english}</div>
-    <div class="estimate" role="img" aria-label="${esc(chartLabel)}">
-      <div class="estimate-head"><span class="est-badge">${esc(t("internal.estimate"))}</span></div>
-      <p class="muted estimate-label">${esc(usage.estimate_label || "")}</p>
-      ${S.lang === "en" ? `<p class="muted">${esc(t("internal.estimate.hint"))}</p>` : ""}
+    <div class="counts" role="img" aria-label="${esc(label)}">
+      <p class="muted counts-label">${esc(label)}</p>
       ${bars}
     </div>
   </article>`;

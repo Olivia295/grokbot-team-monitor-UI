@@ -2,9 +2,11 @@
 
 import json
 import os
+import sqlite3
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
@@ -14,7 +16,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from backend.internal_box import (
-    ESTIMATE_LABEL,
+    COUNTS_LABEL,
     USAGE_NOTE,
     PrivacyError,
     build,
@@ -301,7 +303,7 @@ class PrivacyTest(EnvCase):
         self.assertFalse(any(
             "Willow Mage" in (edge["source"], edge["target"]) for edge in payload["edges"]
         ))
-        self.assertNotIn("Willow Mage", [item["name"] for item in payload["usage"]["estimates"]])
+        self.assertNotIn("Willow Mage", [item["name"] for item in payload["usage"]["counts"]])
         egg = next(bot for bot in payload["bots"] if bot["name"] == "Dr Eggbot")
         self.assertEqual(egg["status"], "no-folder")
 
@@ -319,6 +321,29 @@ class PrivacyTest(EnvCase):
         self.assertEqual(weight("Grok Bot", "Notion Nexus", "mention"), 1)
         self.assertEqual(weight("Morning Bridge", "Grok Bot", "mention"), 1)
         self.assertEqual(weight("Grok Bot", "Dr Eggbot", "dispatch"), 1)
+
+    def test_message_counts_are_real(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config, _nexus, _grok = _sample(Path(tmp))
+            now = int(time.time() * 1000)
+            db = sqlite3.connect(config.agent_data / "search-index.db")
+            db.execute("CREATE TABLE messages (agent_id TEXT, role TEXT, timestamp_ms INTEGER, body TEXT)")
+            db.executemany("INSERT INTO messages VALUES (?,?,?,?)", [
+                ("m1", "assistant", now - 3600_000, "SECRET-BODY"),
+                ("m1", "assistant", now - 7200_000, "SECRET-BODY"),
+                ("m1", "user", now - 3600_000, "SECRET-BODY"),
+                ("m1", "assistant", now - 9 * 86400_000, "too old"),
+                ("w1", "assistant", now - 3600_000, "SECRET-WILLOW"),
+            ])
+            db.commit()
+            db.close()
+            payload = build(config)
+        rows = {row["name"]: row for row in payload["usage"]["counts"]}
+        self.assertEqual((rows["Morning Bridge"]["messages_7d"], rows["Morning Bridge"]["received_7d"]), (2, 1))
+        self.assertEqual(rows["Notion Nexus"]["messages_7d"], 0)
+        self.assertNotIn("Willow Mage", rows)
+        self.assertNotIn("SECRET-BODY", json.dumps(payload, ensure_ascii=False))
+        self.assertIn("Morning Bridge（2 条）", payload["summary"]["text"])
 
     def test_notion_nexus_private_dirs_skipped(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -366,8 +391,8 @@ class PrivacyTest(EnvCase):
             self.assertTrue(any("PUBLIC-TASK" in task for task in nexus_bot["recent_tasks"]))
             self.assertEqual(payload["usage"]["available"], False)
             self.assertEqual(payload["usage"]["note"], USAGE_NOTE)
-            self.assertEqual(payload["usage"]["estimate_label"], ESTIMATE_LABEL)
-            self.assertTrue(payload["usage"]["estimate_label"].startswith("估算"))
+            self.assertEqual(payload["usage"]["counts_label"], COUNTS_LABEL)
+            self.assertNotIn("估算", blob)
 
 
 class QuietHandler(Handler):
@@ -427,7 +452,7 @@ class ApiTest(EnvCase):
         os.environ["BOT_OFFICE_INTERNAL"] = "1"
         status, body, _kind = self.request("/api/internal", {"Origin": "https://evil.example"})
         self.assertEqual(status, 403)
-        self.assertNotIn(b"estimates", body)
+        self.assertNotIn(b"counts_label", body)
 
         sample = {"usage": {"note": USAGE_NOTE, "available": False}, "bots": []}
         with mock.patch("backend.server.build", return_value=sample):
@@ -453,8 +478,8 @@ class UiContractTest(unittest.TestCase):
         self.assertIn('"mode.external": "External"', i18n)
         self.assertIn("未检测到 Grok Bot 本机环境，只能外部读取", i18n)
         self.assertIn("无真实限额/用量数据", i18n)
-        self.assertIn('"internal.estimate": "估算"', i18n)
-        self.assertIn('"internal.estimate": "Estimate"', i18n)
+        self.assertNotIn("internal.estimate", i18n)
+        self.assertNotIn("estimate", script)
         self.assertIn("localStorage", script)
         self.assertIn("api/mode", script)
         self.assertIn("api/internal", script)

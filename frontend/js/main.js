@@ -7,27 +7,41 @@ function paintSource() {
   const banner = $("#banner");
   const source = S.office.source || {};
   const privacy = S.office.privacy ? `${esc(t("banner.privacy"))} <a href="settings.html">${t("banner.settings")}</a>` : "";
+  // The pill always says how the data is read: internal (on the box), external (app cache or
+  // event log), or demo. Nothing found is said plainly instead of filled with a demo team.
   let status = S.office.appOnline ? "ok" : "offline";
   let label = S.office.appOnline ? t("pill.online") : t("pill.offline");
-  let note = privacy;
+  let notes = [privacy];
   if (STATIC) {
     [status, label] = ["demo", t("pill.static")];
-    note = `${esc(t("banner.static"))} <a href="${esc(STATIC.repo)}" target="_blank" rel="noopener">${t("banner.repo")}</a>`;
+    notes = [`${esc(t("banner.static"))} <a href="${esc(STATIC.repo)}" target="_blank" rel="noopener">${t("banner.repo")}</a>`];
   } else if (source.demo) {
     [status, label] = ["demo", t("pill.demo")];
-    note = `${esc(t(S.settings.dataSource === "demo" ? "banner.demo" : "banner.demoAuto"))} <a href="settings.html#data">${t("banner.settings")}</a>`;
+    notes = [`${esc(t("banner.demo"))} <a href="settings.html#data">${t("banner.settings")}</a>`];
   } else if (source.box) {
     [status, label] = ["ok", t("pill.box")];
-    if (source.empty) note = esc(t("box.empty"));
+    if (source.empty) notes.push(esc(t("box.empty")));
   } else if (source.kind === "events") {
     label = S.office.appOnline ? t("pill.events") : t("pill.eventsQuiet");
+  } else if (!source.found) {
+    [status, label] = ["offline", t("pill.none")];
+    notes.push(`${esc(t("banner.none"))} <a href="settings.html#data">${t("banner.settings")}</a>`);
+  } else if (!S.office.appOnline) {
+    notes.push(esc(t("banner.offline")));
   }
   pill.dataset.status = status;
   pill.textContent = label;
-  // Box mode hides what the box can't measure (quota, characters written, app schedules).
-  document.body.classList.toggle("box-mode", Boolean(source.box) && !STATIC);
+  // Quota only exists in the Grok Bot app's cache (and the demo team); hide it everywhere else.
+  document.body.classList.toggle("no-fuel", !source.demo && !(source.kind === "grok" && source.found));
+  const note = notes.filter(Boolean).join(" ");
   banner.hidden = !note;
   banner.innerHTML = note;
+}
+function freshness() {
+  const source = S.office?.source || {};
+  if (source.demo) return t("foot.demo");
+  const checked = t("foot.updated", { time: clock(Date.now()) });
+  return source.dataAt ? `${checked} · ${t("foot.dataAt", { ago: ago(source.dataAt) })}` : checked;
 }
 async function refreshOffice() {
   try {
@@ -37,7 +51,7 @@ async function refreshOffice() {
     renderHero();
     renderRoster();
     renderAttention();
-    $("#freshness").textContent = t("foot.updated", { time: clock(Date.now()) });
+    $("#freshness").textContent = freshness();
   } catch {
     $("#connection").dataset.status = "error";
     $("#connection").textContent = t("pill.error");

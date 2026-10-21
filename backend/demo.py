@@ -185,4 +185,5 @@ def demo_cache(now_ms: int, language: str = "zh", anchor_ms: int | None = None) 
     cache.transcripts = {bot_id: (entries, now_ms - 60 * 1000) for bot_id, entries in builder.entries.items()}
     cache.demo = True
     cache.source = "demo"
+    cache.data_at = now_ms
     return cache
