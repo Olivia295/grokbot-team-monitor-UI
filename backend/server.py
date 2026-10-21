@@ -24,6 +24,7 @@ FRONTEND = ROOT / "frontend"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from backend.internal_box import BoxError, PrivacyError, build, mode_status
 from backend.settings import SettingsError, load_settings, save_settings
 from backend.views import flows_view, insights_view, office_view
 
@@ -80,6 +81,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(flows_view(hours if hours in WINDOWS else 24))
             elif path == "/api/settings":
                 self._json(load_settings())
+            elif path == "/api/mode":
+                self._json(mode_status())
+            elif path == "/api/internal":
+                self._internal()
             else:
                 self.send_error(404)
             return
@@ -121,6 +126,18 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "invalid settings"}, status=400)
             return
         self._json(saved)
+
+    def _internal(self) -> None:
+        status = mode_status()
+        if not status["internal_available"]:
+            self._json({"error": status["reason"], "internal_available": False}, status=403)
+            return
+        try:
+            payload = build()
+        except (BoxError, PrivacyError, OSError, ValueError):
+            self._json({"error": "internal data unavailable"}, status=500)
+            return
+        self._json(payload)
 
     def _json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")

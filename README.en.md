@@ -41,6 +41,7 @@ Bot Office reads the cache Grok Bot keeps on your machine, stitches the handoffs
 - **Bots you can dress up**: 9 bodies × 13 colours × eyes, mouths, hats, held items and outfits — all SVG.
 - **Local and read-only**: listens on `127.0.0.1` only, never writes to Grok Bot's files, never uploads anything; privacy mode hides every message in one click.
 - **Zero setup**: Python 3.9+ standard library, no `pip install`, no build step; a demo team lets you try it without Grok Bot.
+- **Two reading modes**: switch between “Grok Bot box (internal)” and “External” in the top bar. Internal adds on-box work status, collaboration and a usage estimate on top of the office; External is unchanged.
 
 ## Quick start
 
@@ -72,6 +73,12 @@ Bot Office looks for Grok Bot's data here:
 | Linux | `~/.config/Grok Bot` |
 
 If yours lives elsewhere, set it in **Settings → Data source** or via the `GROK_BOT_SUPPORT` environment variable. When no data is found the page switches to demo mode and says so at the top.
+
+### Reading mode
+
+The top bar switches between **Grok Bot box (internal)** and **External**. The choice is stored in the browser. External is the office described above. Internal adds a panel: what each bot has been doing, who mentions whom in the logs, and a usage chart labelled as an estimate. There is no real quota on this machine, so the panel says so.
+
+Internal reading is available only when `/workspace/roster.md` exists and `/home/box/agent-data` is a directory; otherwise that option is disabled. `BOT_OFFICE_INTERNAL=1` forces it on, `=0` forces it off. When the box is detected, internal is the default. Willow Mage is shown as not monitored. Notion `inbox` / `snapshots` / `raw`, secrets, and diary files are never read.
 
 ## Features
 
@@ -169,6 +176,8 @@ flowchart LR
 
 A handoff is recorded twice: the sender's transcript gets a reply with `toAgent`, the receiver's gets a message with `fromAgent`, at almost the same moment; entries sharing a `requestId` belong to one turn. Pairing the two copies lets Bot Office follow a task from your message through every bot that touched it, up to the reply you received. When the receiver's cache has no matching record, that leg is marked as untraced.
 
+Internal reading is a second read-only path: `internal_box.py` reads the roster and each bot folder, and the page loads it from `GET /api/mode` and `GET /api/internal`. When the box is unavailable, `/api/internal` returns a JSON error.
+
 ### Privacy & security
 
 - The server binds to `127.0.0.1` only and rejects API calls from other hosts or origins.
@@ -181,6 +190,7 @@ A handoff is recorded twice: the sender's transcript gets a reply with `toAgent`
 ```text
 backend/
   server.py      local HTTP server (--port / --demo / --open)
+  internal_box.py  on-box bot folders: status, collaboration, usage estimate
   grok_cache.py  reads Grok Bot's cache, finds the folder on each OS
   collab.py      office state and relay reconstruction
   insights.py    profiles, achievements, activity, digest, rhythm

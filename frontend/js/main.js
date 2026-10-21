@@ -68,6 +68,7 @@ function renderAll() {
   renderDigest();
   renderRhythm();
   renderAutomations();
+  if (typeof renderInternal === "function") renderInternal();
   if (S.replay) {
     showFlowDetail(S.replay.flow);
     paintReplay();
@@ -229,11 +230,15 @@ addEventListener("resize", () => {
   $("#ambient").checked = S.ambient;
   idleNarration();
   requestAnimationFrame(frame);
+  if (typeof initDataMode === "function") await initDataMode();
   await refreshOffice();
-  await Promise.all([refreshFlows(), refreshInsights()]);
+  const jobs = [refreshFlows(), refreshInsights()];
+  if (S.dataMode === "internal" && typeof refreshInternal === "function") jobs.push(refreshInternal());
+  await Promise.all(jobs);
   const every = Math.max(2, S.settings.refreshSeconds) * 1000;
   setInterval(refreshOffice, every);
   setInterval(refreshFlows, Math.max(every * 2, 8000));
   setInterval(refreshInsights, 15000);
+  setInterval(() => { if (S.dataMode === "internal") refreshInternal(); }, 20000);
   setInterval(rotateHeadline, 6000);
 })();

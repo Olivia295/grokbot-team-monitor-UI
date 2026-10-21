@@ -12,6 +12,10 @@ const S = {
   hover: null,
   replay: null,
   ambient: true,
+  dataMode: "external",
+  modeInfo: null,
+  internal: null,
+  internalError: false,
 };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -65,6 +69,7 @@ function applySettings() {
     themeButton.innerHTML = icon(dark ? "sun" : "moon", 17);
   }
   translatePage();
+  if (typeof syncModeChrome === "function") syncModeChrome();
 }
 
 // ---------------------------------------------------------------- formatting
