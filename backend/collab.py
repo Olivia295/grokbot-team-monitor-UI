@@ -217,6 +217,9 @@ def _requests(cache: Cache):
                     turn["prompt"] = {"at": at, "text": _plain(entry.get("content"), TRIGGER_CHARS)}
             elif kind == "message" and role == "assistant":
                 target = _ref(entry, "toAgent")
+                if not target:
+                    # A plain assistant message answers the turn. Outgoing handoffs do not.
+                    turn["replied"] = True
                 if target:
                     marker = {"key": key, "from": agent_id, "to": target["id"], "toName": str(target.get("name") or ""),
                               "at": at, "text": _plain(entry.get("content"), STEP_CHARS), "child": None}
@@ -298,7 +301,8 @@ def flows_from(cache: Cache, now_ms: int, hours: int = 24) -> dict:
         steps: list[dict] = []
         for marker in orphan_ins:
             steps.append({"kind": "handoff", "from": marker["from"], "to": marker["to"], "at": marker["at"],
-                          "text": marker["text"], "traced": True, "depth": 0})
+                          "text": marker["text"], "traced": True, "depth": 0,
+                          "replied": bool(turn.get("replied"))})
         seen: set = set()
         walk(key, steps, seen)
         order = {id(step): index for index, step in enumerate(steps)}

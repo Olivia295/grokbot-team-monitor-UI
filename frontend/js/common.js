@@ -12,6 +12,12 @@ const S = {
   hover: null,
   replay: null,
   ambient: true,
+  dataMode: "external",
+  modeInfo: null,
+  modeRequestFailed: false,
+  internal: null,
+  internalError: false,
+  internalRequestFailed: false,
 };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -32,6 +38,26 @@ async function getJson(url) {
   const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) throw new Error(String(response.status));
   return response.json();
+}
+// Distinguishes "not on this box" (403 + internal_available false) from a broken request.
+async function fetchJson(url) {
+  let response;
+  try {
+    response = await fetch(url, { cache: "no-store" });
+  } catch {
+    return { ok: false, failed: true };
+  }
+  let data = null;
+  try { data = await response.json(); } catch { data = null; }
+  if (response.status === 403 && data && data.internal_available === false) {
+    return { ok: false, unavailable: true, data };
+  }
+  if (!response.ok) return { ok: false, failed: true, status: response.status, data };
+  return { ok: true, data };
+}
+function withBox(url) {
+  if (S.dataMode !== "internal") return url;
+  return url + (url.includes("?") ? "&" : "?") + "box=1";
 }
 async function loadSettings() {
   try {
@@ -65,6 +91,7 @@ function applySettings() {
     themeButton.innerHTML = icon(dark ? "sun" : "moon", 17);
   }
   translatePage();
+  if (typeof syncModeChrome === "function") syncModeChrome();
 }
 
 // ---------------------------------------------------------------- formatting
@@ -168,8 +195,14 @@ function detailText(agent) {
   if (!agent) return "";
   return t(`detail.${agent.detail || "idle"}`, { name: agent.detailParam || t("who.teammate") });
 }
+const WILLOW_PLACEHOLDERS = new Set(["（Willow 内容不显示）", "(Willow content hidden)"]);
+function isWillowPlaceholder(text) {
+  return WILLOW_PLACEHOLDERS.has(text);
+}
 function masked(text) {
-  return text === "•••" ? t("privacy.hidden") : text;
+  if (text === "•••") return t("privacy.hidden");
+  if (isWillowPlaceholder(text)) return t("willow.hidden");
+  return text;
 }
 
 // Game-style level from everything a bot has produced: each level needs a bit more than the last.

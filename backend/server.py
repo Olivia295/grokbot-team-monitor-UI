@@ -24,6 +24,7 @@ FRONTEND = ROOT / "frontend"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from backend.internal_box import BoxError, PrivacyError, build, mode_status
 from backend.settings import SettingsError, load_settings, save_settings
 from backend.views import flows_view, insights_view, office_view
 
@@ -55,7 +56,8 @@ class Handler(BaseHTTPRequestHandler):
             hostname = urlsplit("//" + host).hostname
         except ValueError:
             return False
-        return hostname in {"127.0.0.1", "localhost", "::1"} and (not origin or origin == "http://" + host)
+        extra = {h.strip() for h in os.environ.get("BOT_OFFICE_ALLOWED_HOSTS", "").split(",") if h.strip()}
+        return hostname in {"127.0.0.1", "localhost", "::1"} | extra and (not origin or origin == "http://" + host)
 
     def do_GET(self) -> None:
         url = urlsplit(self.path)
@@ -67,19 +69,24 @@ class Handler(BaseHTTPRequestHandler):
             if not self._local():
                 self._json({"error": "请从本机打开Bot协作室。"}, status=403)
                 return
+            query = parse_qs(url.query, max_num_fields=8)
+            box = (query.get("box") or ["0"])[0] == "1"
             if path == "/api/office":
-                self._json(office_view())
+                self._json(office_view(box=box))
             elif path == "/api/insights":
-                self._json(insights_view())
+                self._json(insights_view(box=box))
             elif path == "/api/flows":
-                query = parse_qs(url.query, max_num_fields=4)
                 try:
                     hours = int(query.get("hours", ["24"])[0])
                 except ValueError:
                     hours = 24
-                self._json(flows_view(hours if hours in WINDOWS else 24))
+                self._json(flows_view(hours if hours in WINDOWS else 24, box=box))
             elif path == "/api/settings":
                 self._json(load_settings())
+            elif path == "/api/mode":
+                self._json(mode_status())
+            elif path == "/api/internal":
+                self._internal()
             else:
                 self.send_error(404)
             return
@@ -121,6 +128,18 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "invalid settings"}, status=400)
             return
         self._json(saved)
+
+    def _internal(self) -> None:
+        status = mode_status()
+        if not status["internal_available"]:
+            self._json({"error": status["reason"], "internal_available": False}, status=403)
+            return
+        try:
+            payload = build()
+        except (BoxError, PrivacyError, OSError, ValueError):
+            self._json({"error": "internal data unavailable"}, status=500)
+            return
+        self._json(payload)
 
     def _json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")

@@ -703,6 +703,7 @@ const visits = new Map();
 
 function speakLine(text, from) {
   if (text === "•••") return "•••";
+  if (isWillowPlaceholder(text)) return t("willow.hidden");
   let clean = String(text || "").replace(/^[^：:\s]{1,24}[：:]\s*/, "");
   const name = from ? nameOf(from) : "";
   for (let i = 0; i < 2 && name && clean.startsWith(name); i++) clean = clean.slice(name.length).replace(/^[\s：:，,]+/, "");
@@ -996,7 +997,8 @@ function tickAmbient(now) {
 
 function renderStage() {
   if (!S.office) return;
-  $("#stage-hint").textContent = S.replay ? "" : t(`hint.${S.view}`);
+  const boxEmpty = S.office.source?.box && S.office.source.empty;
+  $("#stage-hint").textContent = S.replay ? "" : boxEmpty ? t("box.empty") : t(`hint.${S.view}`);
   if (S.view === "studio") renderStudio();
   if (S.view === "stars") renderStars();
   if (S.view === "track") renderTrack();

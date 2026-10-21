@@ -115,6 +115,10 @@ function renderFlowList() {
   $("#flow-count").textContent = S.flows.flowCount ? `${S.flows.flowCount}` : "";
   const list = $("#flow-list");
   if (!flows.length) {
+    if (S.office?.source?.box && S.office.source.empty) {
+      list.innerHTML = `<li class="empty">${esc(t("box.empty"))}</li>`;
+      return;
+    }
     list.innerHTML = `<li class="empty">${t(S.filter === "all" ? "flows.none" : "flows.noneFiltered")}${S.hours < 720 ? `<br><button type="button" data-widen>${t("flows.widen")}</button>` : ""}</li>`;
     return;
   }
@@ -130,7 +134,7 @@ function renderFeed() {
   $("#feed").innerHTML = feed.map((item) => `<li data-profile="${esc(item.kind === "ask" ? item.to : item.from)}">
       <span class="icon">${icons[item.kind]}</span>
       <div style="min-width:0"><div class="what">${feedSentence(item)}</div>${item.kind !== "automation" && item.text ? `<div class="text">${esc(masked(item.text))}</div>` : ""}<time>${ago(item.at)} · ${clock(item.at)}</time></div>
-    </li>`).join("") || `<li class="empty">${t("feed.none")}</li>`;
+    </li>`).join("") || `<li class="empty">${esc(t(S.office?.source?.box && S.office.source.empty ? "box.empty" : "feed.none"))}</li>`;
 }
 
 function showFlowDetail(flow) {
@@ -145,6 +149,7 @@ function showFlowDetail(flow) {
     <ol class="relay">${steps.map((step, i) => `<li data-step="${i}" style="--c:${colorVar(step.from)};margin-left:${Math.min(step.depth, 4) * 12}px">
         <div class="row"><span class="t">${plus((step.at || flow.startedAt) - flow.startedAt)}</span>${avatar(step.from, 26)}<span class="muted">→</span>${avatar(step.to, 26)}<span class="who"><b>${esc(nameOf(step.from))}</b> ${esc(stepVerb(step))} <b>${esc(nameOf(step.to))}</b></span></div>
         <div class="text">${esc(stepText(step))}</div>
+        ${step.kind === "handoff" && typeof step.replied === "boolean" ? `<div class="note">${t(step.replied ? "handoff.replied" : "handoff.noreply")}</div>` : ""}
         ${step.kind === "handoff" && !step.traced ? `<div class="note">${t("detail.untraced")}</div>` : ""}
       </li>`).join("")}</ol>`;
 }
@@ -202,7 +207,7 @@ function renderPairs() {
       </div>
       ${pair.quote ? `<div class="pair-quote">${esc(nameOf(pair.quote.from))}：${esc(cut(stepText(pair.quote), 70))}</div>` : ""}
       <div class="pair-foot"><span><span class="chip">${t(pair.ab && pair.ba ? "pairs.mutual" : "pairs.oneway")}</span> ${t("pairs.last", { when: ago(pair.lastAt) })}</span>${pair.flow ? `<button type="button" data-pair-replay="${pair.flow.id}" data-step="${pair.stepIndex}">${t("pairs.watch")} ▶</button>` : ""}</div>
-    </li>`).join("") || `<li class="empty">${t("flows.none")}</li>`;
+    </li>`).join("") || `<li class="empty">${esc(t(S.office?.source?.box && S.office.source.empty ? "box.empty" : "flows.none"))}</li>`;
 }
 
 // ---------------------------------------------------------------- insight cards

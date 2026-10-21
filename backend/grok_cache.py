@@ -67,6 +67,10 @@ class Cache:
     pinned: list[str] = field(default_factory=list)
     usage: dict = field(default_factory=dict)
     demo: bool = False
+    # Box adapter (internal mode). `empty` means the roster may exist but there
+    # is no collaboration record to show, so the page must not invent a demo team.
+    box: bool = False
+    empty: bool = False
     transcripts: dict[str, tuple[list[dict], int]] = field(default_factory=dict)
 
     def transcript(self, agent_id: str) -> tuple[list[dict], int]:
