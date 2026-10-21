@@ -394,20 +394,25 @@ addEventListener("resize", () => {
   if (STATIC) {
     document.body.classList.add("static-demo");
     $("#tv-link").href = "?tv=1";
+    // The sample box panel is extra in the demo: keep the studio first and show it near the end.
+    $(".roster-wrap").before($("#internal-panel"));
   }
   if (typeof initDataMode === "function") await initDataMode();
   await refreshOffice();
   const jobs = [refreshFlows(), refreshInsights(), refreshAlerts()];
-  if (S.dataMode === "internal" && typeof refreshInternal === "function") jobs.push(refreshInternal());
+  if ((S.dataMode === "internal" || STATIC) && typeof refreshInternal === "function") jobs.push(refreshInternal());
   await Promise.all(jobs);
   initTV();
   renderTV();
   openFlowFromHash();
+  // First visit to the online demo: show around, once the page has something in it.
+  const plain = !location.hash && !document.body.classList.contains("tv") && !document.body.classList.contains("overlay");
+  if (STATIC && plain && typeof startTour === "function" && !tourSeen()) setTimeout(startTour, 1200);
   const every = Math.max(2, S.settings.refreshSeconds) * 1000;
   setInterval(refreshOffice, every);
   setInterval(refreshFlows, Math.max(every * 2, 8000));
   setInterval(refreshInsights, 15000);
   setInterval(refreshAlerts, Math.max(every, 5000));
-  setInterval(() => { if (S.dataMode === "internal") refreshInternal(); }, 20000);
+  setInterval(() => { if (S.dataMode === "internal" || STATIC) refreshInternal(); }, 20000);
   setInterval(rotateHeadline, 6000);
 })();

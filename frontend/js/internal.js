@@ -2,6 +2,8 @@
 // External mode leaves this hidden. The choice is saved as the readMode setting on the
 // server, so alerts, the big screen and every open page read the same source.
 
+// The online demo shows the panel as a labelled sample, built from the demo team.
+const showsPanel = () => S.dataMode === "internal" || Boolean(STATIC);
 const MODE_KEY = "botOffice.dataMode"; // where the first version kept it, per browser (localStorage)
 let internalGen = 0;
 
@@ -50,7 +52,7 @@ function syncModeChrome() {
   // So the switch stays hidden, and only shows up to offer a retry when /api/mode fails.
   document.getElementById("mode-switch").hidden = !S.modeRequestFailed;
   const panel = document.getElementById("internal-panel");
-  if (panel) panel.hidden = S.dataMode !== "internal";
+  if (panel) panel.hidden = !showsPanel();
 }
 
 function reloadOfficeViews() {
@@ -135,12 +137,33 @@ function formatGenerated(iso, zone) {
   return `${t("internal.generated", { time: when })}${zone ? ` · ${zone}` : ""}`;
 }
 
-function tasksCell(bot) {
+function tasksCell(bot, index) {
   if (bot.status === "不监控" || bot.status === "no-folder") return '<span class="muted">—</span>';
   const tasks = bot.recent_tasks || [];
   if (!tasks.length) return `<span class="muted">${esc(t("internal.tasks.none"))}</span>`;
-  const items = tasks.map((task) => `<li>${esc(task)}</li>`).join("");
-  return `<details><summary>${esc(t("internal.tasks.count", { n: tasks.length }))}</summary><ul>${items}</ul></details>`;
+  const label = t("internal.tasks.open", { name: bot.name });
+  return `<button type="button" class="link-btn tasks-btn" data-tasks="${index}" aria-haspopup="dialog" aria-label="${esc(label)}">${esc(t("internal.tasks.count", { n: tasks.length }))} <span aria-hidden="true">›</span></button>`;
+}
+// Recent tasks open in a small window: date, then what was asked.
+function openTasks(index) {
+  const bot = S.internal?.bots?.[index];
+  const dialog = $("#tasks-dialog");
+  if (!bot || !dialog) return;
+  const meta = [bot.label, bot.group].filter(Boolean).join(" · ");
+  const items = (bot.recent_tasks || []).map((task) => {
+    const match = String(task).match(/^(\d{4}-\d{2}-\d{2})\s+(.*)$/);
+    return match
+      ? `<li><time>${esc(match[1])}</time><span>${esc(match[2])}</span></li>`
+      : `<li><span>${esc(task)}</span></li>`;
+  }).join("");
+  $("#tasks-body").innerHTML = `<header class="tasks-head">
+      <h3 id="tasks-title">${esc(bot.name)}</h3>
+      <p class="muted">${meta ? `<span>${esc(meta)}</span>` : ""}<span class="st-badge ${esc(statusClass(bot.status))}">${esc(statusLabel(bot.status))}</span></p>
+    </header>
+    ${bot.duty ? `<p class="tasks-duty">${esc(bot.duty)}</p>` : ""}
+    <h4>${esc(t("internal.tasks.title"))}</h4>
+    <ol class="tasks-list">${items}</ol>`;
+  if (!dialog.open) dialog.showModal();
 }
 
 function summaryCard(data) {
@@ -152,14 +175,16 @@ function summaryCard(data) {
     ["internal.stat.nofolder", summary.no_folder],
     ["internal.stat.unmonitored", summary.unmonitored],
   ];
-  const chips = stats.map(([key, value]) => (
+  // Folder-less and unmonitored bots are exceptions: only show them when there are some.
+  const chips = stats.filter(([key, value]) => value || !/nofolder|unmonitored/.test(key)).map(([key, value]) => (
     `<div class="internal-stat"><b class="num">${esc(value ?? 0)}</b><span>${esc(t(key))}</span></div>`
   )).join("");
-  const zhNote = S.lang === "en" ? `<p class="muted">${esc(t("internal.summary.zh"))}</p>` : "";
+  const english = S.lang === "en" && summary.text_en;
+  const zhNote = S.lang === "en" && !english ? `<p class="muted">${esc(t("internal.summary.zh"))}</p>` : "";
   return `<article class="card internal-card">
     <h3>${esc(t("internal.summary"))}</h3>
     <div class="internal-stats">${chips}</div>
-    <p class="internal-summary">${esc(summary.text || "")}</p>
+    <p class="internal-summary">${esc((english ? summary.text_en : summary.text) || "")}</p>
     ${zhNote}
     <p class="muted internal-privacy">${esc(t("internal.privacy"))}</p>
   </article>`;
@@ -168,7 +193,7 @@ function summaryCard(data) {
 function tableCard(data) {
   const head = ["name", "label", "group", "status", "last", "files", "tasks"]
     .map((key) => `<th>${esc(t(`internal.col.${key}`))}</th>`).join("");
-  const rows = (data.bots || []).map((bot) => {
+  const rows = (data.bots || []).map((bot, index) => {
     const quiet = bot.status === "不监控";
     const last = quiet || !bot.last_activity ? "—" : String(bot.last_activity).replace("T", " ").slice(0, 16);
     const files = quiet ? "—" : String(bot.files_modified_7d ?? 0);
@@ -180,7 +205,7 @@ function tableCard(data) {
       <td><span class="st-badge ${esc(statusClass(bot.status))}">${esc(statusLabel(bot.status))}</span></td>
       <td>${esc(last)}</td>
       <td class="num">${esc(files)}</td>
-      <td>${tasksCell(bot)}</td>
+      <td>${tasksCell(bot, index)}</td>
     </tr>`;
   }).join("");
   return `<article class="card internal-card">
@@ -211,9 +236,8 @@ function edgesCard(data) {
 
 function usageCard(data) {
   const usage = data.usage || {};
-  const note = usage.note || t("internal.usage.none");
-  const english = S.lang === "en" && note !== t("internal.usage.none")
-    ? `<span class="quota-en">${esc(t("internal.usage.none"))}</span>` : "";
+  // The box writes this note in Chinese; English readers get the same fact in English.
+  const note = S.lang === "en" ? t("internal.usage.none") : (usage.note || t("internal.usage.none"));
   const counts = usage.counts || [];
   const max = counts.reduce((peak, item) => Math.max(peak, item.messages_7d || 0), 0);
   const bars = counts.length
@@ -231,7 +255,7 @@ function usageCard(data) {
   const label = S.lang === "en" ? t("internal.counts.hint") : (usage.counts_label || t("internal.counts.hint"));
   return `<article class="card internal-card">
     <h3>${esc(t("internal.usage"))}</h3>
-    <div class="quota-banner"><span class="quota-mark" aria-hidden="true">!</span><strong>${esc(note)}</strong>${english}</div>
+    <div class="quota-banner"><span class="quota-mark" aria-hidden="true">!</span><strong>${esc(note)}</strong></div>
     <div class="counts" role="img" aria-label="${esc(label)}">
       <p class="muted counts-label">${esc(label)}</p>
       ${bars}
@@ -242,8 +266,11 @@ function usageCard(data) {
 function renderInternal() {
   const panel = $("#internal-panel");
   if (!panel) return;
-  panel.hidden = S.dataMode !== "internal";
-  if (S.dataMode !== "internal") return;
+  panel.hidden = !showsPanel();
+  if (!showsPanel()) return;
+  $("#internal-title").textContent = t(STATIC ? "internal.titleDemo" : "internal.title");
+  const intro = $("#internal-intro");
+  if (intro) intro.hidden = !STATIC;
   const body = $("#internal-body");
   const stamp = $("#internal-stamp");
   if (S.internalRequestFailed) {
@@ -268,6 +295,13 @@ function renderInternal() {
 
 async function refreshInternal() {
   const gen = ++internalGen;
+  if (STATIC) {
+    const result = await fetchJson("api/internal");
+    if (result.ok) S.internal = result.data;
+    S.internalRequestFailed = !result.ok && !S.internal;
+    renderInternal();
+    return;
+  }
   if (S.dataMode !== "internal") {
     renderInternal();
     return;
@@ -305,6 +339,10 @@ async function refreshInternal() {
 
 document.addEventListener("click", (event) => {
   if (event.target.closest("#internal-retry")) refreshInternal();
+  const tasks = event.target.closest("[data-tasks]");
+  if (tasks) openTasks(Number(tasks.dataset.tasks));
 });
+$("#tasks-close")?.addEventListener("click", () => $("#tasks-dialog").close());
+$("#tasks-dialog")?.addEventListener("click", (event) => { if (event.target === event.currentTarget) event.currentTarget.close(); });
 
 bindModeSwitch();

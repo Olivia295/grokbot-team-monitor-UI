@@ -8,6 +8,7 @@
 
 See what every bot is doing, who handed what to whom, where work gets stuck, and every leg a task took from your message to the final reply.
 
+[![Live demo](https://img.shields.io/badge/live%20demo-open-2f7fd8.svg)](https://olivia295.github.io/grokbot-teamwork-UI/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0d0d0f.svg)](./LICENSE)
 ![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-0d0d0f.svg)
 ![Zero dependencies](https://img.shields.io/badge/dependencies-none-0d0d0f.svg)
@@ -16,7 +17,7 @@ See what every bot is doing, who handed what to whom, where work gets stuck, and
 
 [中文](./README.zh-CN.md) · **English**
 
-[What's new](#whats-new-in-050) · [Real data](#real-data-clearly-labelled) · [Quick start](#quick-start) · [Features](#features) · [Any agent system](#any-multi-agent-system) · [Grok Bot box](#inside-the-grok-bot-box) · [Settings](#settings--customization) · [FAQ](#faq)
+[Live demo](https://olivia295.github.io/grokbot-teamwork-UI/) · [What's new](#whats-new-in-050) · [Real data](#real-data-clearly-labelled) · [Quick start](#quick-start) · [Features](#features) · [Any agent system](#any-multi-agent-system) · [Grok Bot box](#inside-the-grok-bot-box) · [Settings](#settings--customization) · [FAQ](#faq)
 
 <img src="docs/screenshots/overview-en-dark.png" alt="Bot Office overview in dark mode: HUD, achievements, studio stage and relay list" width="100%">
 
@@ -43,7 +44,7 @@ Bot Office reads the cache Grok Bot keeps on your machine, stitches the handoffs
 - **Two ways to read Grok Bot**: from your computer (the Grok Bot app's cache), or from inside the Grok Bot box itself, which adds each bot's work status, recent tasks, real message counts and who dispatches whom.
 - **Only real data, always labelled**: the header says whether the page reads internally, externally or shows the demo, and the footer says when the data last changed. Nothing found means an empty office, not a stand-in team.
 - **Local and read-only**: it listens on `127.0.0.1` only, never writes to Grok Bot's files, and uploads nothing. Alerts go only to the addresses you add, and privacy mode hides every message in one click.
-- **Zero setup**: Python 3.9+ standard library only, with no build step. Start it with `--demo` to try it without Grok Bot.
+- **Zero setup**: Python 3.9+ standard library only, with no build step. Try the [online demo](https://olivia295.github.io/grokbot-teamwork-UI/) with a guided tour, nothing to install, or start a local copy with `--demo`.
 
 ## What's new in 0.5.0
 
@@ -51,6 +52,9 @@ This release is about trust: every number on the page is real, and the page alwa
 
 | | Update | Where |
 | --- | --- | --- |
+| 🌐 | **Online demo with a guided tour**: a made-up team that always looks live, a 9-stop tour of what each part of the page does (reopen it with **?**), demo alerts found by the real alert rules, and a sample Grok Bot box panel. Nothing to install | [olivia295.github.io/grokbot-teamwork-UI](https://olivia295.github.io/grokbot-teamwork-UI/) |
+| 🗒 | **Recent tasks in a pop-up**: in the box panel, click a bot's task count to open its duty and recent tasks with dates, instead of a cramped inline list | Box panel |
+| ✨ | **Usability pass**: no sideways scrolling on phones, the tour's bottom sheet on small screens, English text for English readers in the box panel, hidden empty counters, shorter labels | Everywhere |
 | 🏷 | **Read mode in the header**: *Internal · Grok Bot box*, *External · Grok Bot app online / closed*, *External · event log*, *Demo data · not real* or *External · no data found* | Header pill · Settings → Data source |
 | 🕒 | **Data freshness**: the footer shows when the underlying data last changed (from the cache, event log or box files), not just when the page refreshed | Footer |
 | 🚫 | **No automatic demo team**: with nothing to read, the office stays empty and says so. The demo appears only with `--demo` or Settings → Data source → Demo | [Real data](#real-data-clearly-labelled) |
@@ -66,7 +70,7 @@ This release is about trust: every number on the page is real, and the page alwa
 
 | | Update | Where |
 | --- | --- | --- |
-| 🌐 | **Static demo build**: `scripts/build_pages.py` turns the demo team into a backend-free site that loops and always looks live. It isn't published yet | `scripts/build_pages.py` |
+| 🌐 | **Online demo**: the whole app on GitHub Pages with a looping, always-live demo team | [Live demo](https://olivia295.github.io/grokbot-teamwork-UI/) |
 | | Update | Where |
 | 🔔 | **Alerts**: desktop notifications and Slack / Discord / Feishu / DingTalk / generic webhooks when a bot errors, waits for you or a handoff goes unanswered. Includes quiet hours, cooldowns and a test button | Settings → Alerts · 🔔 in the header |
 | 🔌 | **Event adapter**: any multi-agent system can appear in the office via a JSONL log or `POST /api/events`, with a Python helper and recipes | [docs/events.md](docs/events.md) |
@@ -240,7 +244,7 @@ Send alerts to a **desktop notification** (macOS, Windows, Linux with `notify-se
 | Replay | — | Leg-by-leg replay in three views, searchable, linkable, exportable as GIF |
 | Analysis | Yesterday's memo | Bottlenecks and Sankey, daily digest and weekly report, rhythm heatmap, needs-you list, partners, achievements |
 | Notifications | — | Desktop, Slack, Discord, Feishu, DingTalk, webhooks |
-| Display | Browser page | Page, big-screen TV mode, OBS overlay, menu-bar app, static demo build |
+| Display | Browser page | Page, big-screen TV mode, OBS overlay, menu-bar app, online demo with a guided tour |
 | Characters | Pixel-art assets with swappable backgrounds | Mix-and-match SVG kit (body, colour, face, hat, held item, outfit) |
 | Runtime | Flask | Standard library only, zero dependencies |
 
@@ -279,7 +283,7 @@ Bot Office can also run **inside the Grok Bot box** (the machine your bots work 
 | Message text | Short handoff titles only. Your own messages keep only time and recipient | Full text (hide it with privacy mode) |
 
 - **When it switches on**: internal reading is used whenever both `/workspace/roster.md` and `/home/box/agent-data` exist. `BOT_OFFICE_INTERNAL=1` forces it on and `=0` forces it off. The page, alerts, the big screen and the menu-bar app all read the same source. Off the box, `/api/internal` answers 403.
-- **Box panel**: per bot, when its files last changed (*today*, *in 3 days*, *earlier*), files changed in 7 days, recent tasks from its log, and messages sent and received in the last 7 days. Counts are `COUNT(*)` queries; message bodies are never selected.
+- **Box panel**: per bot, when its files last changed (*today*, *in 3 days*, *earlier*), files changed in 7 days, recent tasks from its log (click the count to open them), and messages sent and received in the last 7 days. Counts are `COUNT(*)` queries; message bodies are never selected.
 - **What it never reads**: Notion Nexus `inbox` / `snapshots` / `raw`, `~/.codex`, `~/.grok`, `auth.json`, anything with `token` in its name, `*.env`, and files named 周记 / 日记. Willow Mage shows only its name and "not monitored". Handoff titles that look personal are replaced with "(hidden)". The SQLite index is opened read-only (`mode=ro`).
 - **No demo stand-ins**: with no records yet, the box view says "No box collaboration records yet" instead of showing the demo team.
 
@@ -347,7 +351,7 @@ flowchart LR
 
 A handoff is recorded twice: the sender's transcript gets a reply with `toAgent`, and the receiver's gets a message with `fromAgent`, at almost the same moment. Entries sharing a `requestId` belong to one turn. Pairing the two copies lets Bot Office follow a task from your message through every bot that touched it, up to the reply you received. The time from a handoff to the receiver's first output is the pickup time used in the bottleneck view. When the receiver's cache has no matching record, that leg is marked as untraced. The event adapter turns JSONL events into exactly this shape, so every view works the same for other systems.
 
-The static demo build is the same frontend with no server: `scripts/build_pages.py` records the demo team as JSON frames 30 seconds apart, and the page loops them while moving every timestamp to the present.
+The [online demo](https://olivia295.github.io/grokbot-teamwork-UI/) is the same frontend with no server: `scripts/build_pages.py` records the demo team as JSON frames 30 seconds apart, and the page loops them while moving every timestamp to the present. It also runs the real alert rules over the recording (`alerts.json`) and builds a sample box panel from the demo team's records (`internal.json`), so visitors can see alerts and box reading without a box.
 
 ### Privacy & security
 
@@ -376,7 +380,7 @@ frontend/
   js/  i18n.js · avatars.js · common.js · stage.js · panels.js · internal.js · export.js · tv.js · main.js · settings.js
 integrations/    bot_office.py: drop-in Python client for the event log
 examples/        simulate_events.py: a fake team to try the event adapter
-scripts/         build_pages.py: builds the static demo into site/
+scripts/         build_pages.py: builds the online demo into site/
 packaging/       homebrew/ formula · macos/ menu-bar app
 docs/            events.md, logo and screenshots
 tests/           unit tests
@@ -388,13 +392,13 @@ start.sh · start.command · start.bat · pyproject.toml
 ```bash
 python3 -B -m unittest discover -s tests -v     # backend tests
 python3 backend/server.py --demo --open          # work against demo data
-python3 scripts/build_pages.py                   # build the static demo into site/
+python3 scripts/build_pages.py                   # build the online demo into site/
 python3 -m http.server -d site 8000              # …and preview it
 python3 examples/simulate_events.py --post --live   # feed a running office with fake events
 ./packaging/macos/build-app.sh                   # build the menu-bar app into dist/
 ```
 
-There is no build step for the app itself: edit and refresh. GitHub Actions runs the tests on macOS, Windows and Linux with Python 3.9 and 3.12, and builds the static site and the wheel. The workflow can also publish the static demo to GitHub Pages; that's switched off for this repository for now. To turn it on for a fork, set **Settings → Pages → Source** to "GitHub Actions".
+There is no build step for the app itself: edit and refresh. GitHub Actions runs the tests on macOS, Windows and Linux with Python 3.9 and 3.12, and builds the static site and the wheel. Every push to `main` publishes the online demo to GitHub Pages. To turn the demo on for a fork, set **Settings → Pages → Source** to "GitHub Actions".
 
 ## FAQ
 
@@ -407,7 +411,7 @@ No Grok Bot cache (and no event log) was found, so the office stays empty instea
 <details>
 <summary><b>Alerts don't arrive</b></summary>
 
-Check that alerts are switched on and use **Send a test alert** in Settings → Alerts, which shows the result for each channel. On macOS, allow notifications for "Script Editor" (that's what posts them) in System Settings → Notifications. With DingTalk keyword checks, add the keyword "Bot Office". Alerts need the local server; the static demo never sends any.
+Check that alerts are switched on and use **Send a test alert** in Settings → Alerts, which shows the result for each channel. On macOS, allow notifications for "Script Editor" (that's what posts them) in System Settings → Notifications. With DingTalk keyword checks, add the keyword "Bot Office". Alerts need the local server; the online demo only shows demo alerts and never sends any.
 </details>
 
 <details>
@@ -425,7 +429,7 @@ Run `bot-office --port 19201` (or `python3 backend/server.py --port 19201`), or 
 <details>
 <summary><b>I want to share a screenshot without showing conversations</b></summary>
 
-Turn on privacy mode in Settings to hide every message and bot description. Or start with `--demo` and share that.
+Turn on privacy mode in Settings to hide every message and bot description. Or start with `--demo`, or share the [online demo](https://olivia295.github.io/grokbot-teamwork-UI/).
 </details>
 
 <details>

@@ -53,8 +53,6 @@ async function postJson(url, body) {
 // Distinguishes "not on this box" (403 + internal_available false) from a broken request.
 async function fetchJson(url) {
   if (STATIC) {
-    // The online demo has no box behind it.
-    if (url.startsWith("api/internal")) return { ok: false, unavailable: true, data: { internal_available: false, reason: "online demo" } };
     try { return { ok: true, data: await staticJson(url) }; } catch { return { ok: false, failed: true }; }
   }
   let response;
@@ -136,10 +134,17 @@ async function staticJson(url) {
     try { saved = JSON.parse(localStorage.getItem(STATIC_KEY) || "{}"); } catch { /* ignore */ }
     return { ...structuredClone(DEFAULT_SETTINGS), dataSource: "demo", ...saved };
   }
-  if (path === "api/alerts") return { enabled: false, alerts: [] };
   if (path === "api/mode") return { internal_available: false, reason: "online demo", mode: "external", setting: "auto" };
   const lang = S.lang === "en" ? "en" : "zh";
   const { shift, frame } = staticClock();
+  const loop = STATIC.step * STATIC.frames;
+  if (path === "api/alerts") {
+    // What the real alert rules found in the recording, this loop and the one before, up to now.
+    const recorded = await staticFile(`${lang}/alerts.json`);
+    const seen = [shift, shift - loop].flatMap((by) => recorded.map((alert) => ({ ...alert, id: `${alert.id}+${by}`, at: alert.at + by })));
+    return { enabled: true, demo: true, alerts: seen.filter((alert) => alert.at <= Date.now()).sort((a, b) => b.at - a.at) };
+  }
+  if (path === "api/internal") return staticInternal(await staticFile(`${lang}/internal.json`), shift);
   let data;
   if (path === "api/office" || (path === "api/flows" && (new URLSearchParams(query).get("hours") || "24") === "24")) {
     const both = await staticFile(`${lang}/frame-${String(frame).padStart(3, "0")}.json`);
@@ -154,6 +159,20 @@ async function staticJson(url) {
   const day = 86400e3;
   shiftTimes(data, shift, STATIC.t0 - 90 * day, STATIC.t0 + STATIC.step * STATIC.frames + 10 * day);
   return staticView(path, data);
+}
+// The demo box panel keeps times in ms; turn them into the strings /api/internal sends.
+function staticInternal(data, shift) {
+  const local = (ms) => {
+    const d = new Date(ms + shift);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  data.generated_at = local(Date.now() - shift);
+  for (const bot of data.bots) {
+    bot.last_activity = bot.last_activity_ms ? local(bot.last_activity_ms) : null;
+    bot.recent_tasks = (bot.recent_tasks_ms || []).map(([ms, text]) => `${local(ms).slice(0, 10)} ${text}`);
+  }
+  return data;
 }
 // The same adjustments backend/views.py makes, for the static demo.
 function staticView(path, data) {

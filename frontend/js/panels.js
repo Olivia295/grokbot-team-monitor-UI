@@ -383,7 +383,7 @@ function renderRoster() {
       ${avatarSVG(agent, 64)}
       <span style="min-width:0">
         <h3>${level ? `<span class="lv">Lv${level.level}</span> ` : ""}${esc(agent.name)}</h3>
-        <span class="sub"><span class="dot" style="background:${colorVar(agent.id)}"></span>${esc(roomName(wingOf(agent)))}${agent.title ? ` · ${esc(agent.title)}` : ""}<span class="state ${isBusy(agent) ? "busy" : ""}">${esc(stateText(agent))}</span></span>
+        <span class="sub"><span class="dot" style="background:${colorVar(agent.id)}"></span>${esc(roomName(wingOf(agent)))}${agent.title && agent.title !== roomName(wingOf(agent)) ? ` · ${esc(agent.title)}` : ""}<span class="state ${isBusy(agent) ? "busy" : ""}">${esc(stateText(agent))}</span></span>
         ${profile ? miniBars(profile.days, colorVar(agent.id)) : ""}
         ${profile ? `<span class="nums">${t("roster.nums", { r: profile.replies, o: profile.handoffsOut, i: profile.handoffsIn })}</span>` : ""}
         ${level ? `<div class="xp" title="${esc(t("roster.xp", { xp: level.xp, next: level.toNext }))}"><i style="width:${Math.round(level.progress * 100)}%"></i></div>` : ""}

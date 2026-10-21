@@ -8,6 +8,7 @@
 
 看见每个 bot 在忙什么、谁把活交给了谁、活卡在了哪里、一件事从你开口到收到回复经过了哪几棒。
 
+[![在线演示](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E6%BC%94%E7%A4%BA-%E6%89%93%E5%BC%80-2f7fd8.svg)](https://olivia295.github.io/grokbot-teamwork-UI/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0d0d0f.svg)](./LICENSE)
 ![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-0d0d0f.svg)
 ![Zero dependencies](https://img.shields.io/badge/dependencies-none-0d0d0f.svg)
@@ -16,7 +17,7 @@
 
 **中文** · [English](./README.md)
 
-[0.5 更新](#050-更新了什么) · [真实数据](#只用真实数据并标明来源) · [快速开始](#快速开始) · [功能](#功能) · [接入其他系统](#接入任何多-agent-系统) · [Grok Bot 本机](#在-grok-bot-本机里运行) · [设置](#设置与自定义) · [常见问题](#常见问题)
+[在线演示](https://olivia295.github.io/grokbot-teamwork-UI/) · [0.5 更新](#050-更新了什么) · [真实数据](#只用真实数据并标明来源) · [快速开始](#快速开始) · [功能](#功能) · [接入其他系统](#接入任何多-agent-系统) · [Grok Bot 本机](#在-grok-bot-本机里运行) · [设置](#设置与自定义) · [常见问题](#常见问题)
 
 <img src="docs/screenshots/overview-zh.png" alt="Bot协作室总览：顶部看板、本期成就、工作室舞台和协作流程" width="100%">
 
@@ -43,7 +44,7 @@ Bot协作室读取 Grok Bot 留在本机的缓存，把这些交接拼回完整�
 - **两种读取 Grok Bot 的方式**：在电脑上读 Grok Bot 应用的缓存，或者直接在 Grok Bot 本机（bot 们干活的那台机器）里读，多出每个 bot 的工作状态、最近任务、真实消息条数和谁给谁派活。
 - **只用真实数据，并标明来源**：顶栏写明是内部读取、外部读取还是演示数据，页脚写明数据最后变化的时间。什么都没读到时，办公室就是空的，不会拿演示团队顶替。
 - **只在本机、只读**：只监听 `127.0.0.1`，不改 Grok Bot 的文件，不上传任何数据；提醒只发到你自己填的地址；隐私模式一键隐藏所有消息内容。
-- **开箱即用**：Python 3.9+ 标准库，零依赖、不用构建；没有 Grok Bot 时，用 `--demo` 启动就能先体验。
+- **开箱即用**：Python 3.9+ 标准库，零依赖、不用构建；打开[在线演示](https://olivia295.github.io/grokbot-teamwork-UI/)跟着导览看一遍，不用安装；也可以用 `--demo` 在本机启动。
 
 ## 0.5.0 更新了什么
 
@@ -51,6 +52,9 @@ Bot协作室读取 Grok Bot 留在本机的缓存，把这些交接拼回完整�
 
 | | 更新 | 在哪里 |
 | --- | --- | --- |
+| 🌐 | **带导览的在线演示**：一支看起来永远是实时的虚构团队；9 步导览讲清页面每一块能做什么（点 **?** 可以再看一遍）；用真实提醒规则算出来的演示提醒；以及一份 Grok Bot 本机面板的样例。不用安装 | [olivia295.github.io/grokbot-teamwork-UI](https://olivia295.github.io/grokbot-teamwork-UI/) |
+| 🗒 | **最近任务改成弹窗**：在本机面板里点 bot 的任务条数，弹出它的职责和带日期的最近任务，不再挤在表格里展开 | 本机面板 |
+| ✨ | **可用性打磨**：手机上不再左右滑动、小屏上导览变成底部卡片、英文界面的本机面板显示英文、为 0 的例外计数自动隐藏、更短的标签 | 全站 |
 | 🏷 | **顶栏标明读取方式**：「内部读取 · Grok Bot 本机」「外部读取 · Grok Bot 应用在线 / 没开」「外部读取 · 事件日志」「演示数据 · 不是真实数据」或「外部读取 · 没找到数据」 | 顶栏标签 · 设置 → 数据来源 |
 | 🕒 | **数据新鲜度**：页脚写明数据本身最后变化的时间（取自应用缓存、事件日志或本机文件），而不只是页面刷新的时间 | 页脚 |
 | 🚫 | **不再自动用演示团队**：没有可读的数据时，办公室保持空白并直接说明；演示团队只在 `--demo` 或 设置 → 数据来源 → 演示 时出现 | [真实数据](#只用真实数据并标明来源) |
@@ -66,7 +70,7 @@ Bot协作室读取 Grok Bot 留在本机的缓存，把这些交接拼回完整�
 
 | | 更新 | 在哪里 |
 | --- | --- | --- |
-| 🌐 | **静态演示站**：`scripts/build_pages.py` 把演示团队做成不需要后台的网站，循环播放、看起来永远是实时的。暂未公开发布 | `scripts/build_pages.py` |
+| 🌐 | **在线演示**：整个应用跑在 GitHub Pages 上，演示团队循环播放、看起来永远是实时的 | [在线演示](https://olivia295.github.io/grokbot-teamwork-UI/) |
 | | 更新 | 在哪里 |
 | 🔔 | **提醒**：bot 出错、等你回复、交接没人接时，发桌面通知和 Slack / Discord / 飞书 / 钉钉 / 通用 Webhook；支持免打扰时段、防重复、一键测试 | 设置 → 提醒 · 顶栏 🔔 |
 | 🔌 | **事件适配器**：任何多 agent 系统都能通过 JSONL 日志或 `POST /api/events` 接入，附 Python 小工具和接入示例 | [docs/events.md](docs/events.md) |
@@ -240,7 +244,7 @@ Bot协作室默认在这些位置找 Grok Bot 的数据：
 | 回放 | — | 三种视图逐棒回放，可搜索、可分享链接、可导出 GIF |
 | 分析 | 昨日小记 | 瓶颈与桑基图、日报与周报、作息热力图、待办提醒、搭档、成就 |
 | 通知 | — | 桌面、Slack、Discord、飞书、钉钉、Webhook |
-| 展示 | 网页 | 网页、电视大屏、OBS 叠加层、菜单栏小程序、静态演示站 |
+| 展示 | 网页 | 网页、电视大屏、OBS 叠加层、菜单栏小程序、带导览的在线演示 |
 | 形象 | 像素素材，可换背景 | 可自由搭配的 SVG 形象（身体、颜色、五官、帽子、手持物、服饰） |
 | 运行方式 | Flask | 只用标准库，零依赖 |
 
@@ -279,7 +283,7 @@ Bot协作室也可以直接跑在 **Grok Bot 本机**（bot 们干活的那台�
 | 消息内容 | 只保留简短的交接标题；你自己的消息只留时间和对象 | 完整内容（可用隐私模式隐藏） |
 
 - **什么时候启用**：`/workspace/roster.md` 和 `/home/box/agent-data` 都存在时就会本机读取；`BOT_OFFICE_INTERNAL=1` 强制打开，`=0` 强制关闭。页面、提醒、大屏和菜单栏小程序读的都是同一个来源。不在本机时，`/api/internal` 返回 403。
-- **本机面板**：每个 bot 的文件最后改动时间（今天 / 3 天内 / 更早）、7 天改动文件数、日志里的最近任务，以及近 7 天发出和收到的消息条数。计数用的是 `COUNT(*)` 查询，从不读取消息正文。
+- **本机面板**：每个 bot 的文件最后改动时间（今天 / 3 天内 / 更早）、7 天改动文件数、日志里的最近任务（点条数弹出详情），以及近 7 天发出和收到的消息条数。计数用的是 `COUNT(*)` 查询，从不读取消息正文。
 - **永远不读的东西**：Notion Nexus 的 `inbox` / `snapshots` / `raw`、`~/.codex`、`~/.grok`、`auth.json`、名字里带 `token` 的文件、`*.env`，以及名字里有「周记」「日记」的文件。Willow Mage 只显示名字和「不监控」。看起来涉及个人情绪的交接标题会显示成「（内容已隐藏）」。SQLite 索引以只读方式（`mode=ro`）打开。
 - **不拿演示数据凑数**：还没有记录时，本机模式显示「本机暂无协作记录」，不会换成演示团队。
 
@@ -347,7 +351,7 @@ flowchart LR
 
 一次交接会被记两遍：交出方的记录里有一条带 `toAgent` 的回复，接手方的记录里有一条带 `fromAgent` 的消息，时间几乎相同；同一个 `requestId` 的记录属于同一轮。把两边配对，就能从你的一句话一路追到每个转手的 bot，直到你收到的回复。从交接到接手方第一次产出之间的时间，就是瓶颈分析里的「接手时间」。接手方的缓存里没有对应记录时，这一棒会标成「没追到下一棒」。事件适配器把 JSONL 事件转换成完全相同的结构，所以所有视图对其他系统同样适用。
 
-静态演示站用的是同一套前端，只是没有后端：`scripts/build_pages.py` 把演示团队录成每 30 秒一帧的 JSON，页面循环播放，并把所有时间挪到当前时刻。
+[在线演示](https://olivia295.github.io/grokbot-teamwork-UI/)用的是同一套前端，只是没有后端：`scripts/build_pages.py` 把演示团队录成每 30 秒一帧的 JSON，页面循环播放，并把所有时间挪到当前时刻。它还会用真实的提醒规则跑一遍录下来的数据（`alerts.json`），并用演示团队的记录生成一份本机面板样例（`internal.json`），没有 Grok Bot 本机也能看到提醒和本机读取长什么样。
 
 ### 隐私与安全
 
@@ -376,7 +380,7 @@ frontend/
   js/  i18n.js · avatars.js · common.js · stage.js · panels.js · internal.js · export.js · tv.js · main.js · settings.js
 integrations/    bot_office.py：事件日志的 Python 客户端，复制即用
 examples/        simulate_events.py：模拟一个团队，体验事件适配器
-scripts/         build_pages.py：把静态演示站构建到 site/
+scripts/         build_pages.py：把在线演示构建到 site/
 packaging/       homebrew/ 配方 · macos/ 菜单栏小程序
 docs/            events.md、logo 和截图
 tests/           单元测试
@@ -388,13 +392,13 @@ start.sh · start.command · start.bat · pyproject.toml
 ```bash
 python3 -B -m unittest discover -s tests -v     # 后端测试
 python3 backend/server.py --demo --open          # 用演示数据开发
-python3 scripts/build_pages.py                   # 把静态演示站构建到 site/
+python3 scripts/build_pages.py                   # 把在线演示构建到 site/
 python3 -m http.server -d site 8000              # ……并本地预览
 python3 examples/simulate_events.py --post --live   # 给运行中的办公室喂模拟事件
 ./packaging/macos/build-app.sh                   # 构建菜单栏小程序到 dist/
 ```
 
-应用本身没有构建步骤，改完刷新就行。GitHub Actions 会在 macOS、Windows、Linux 上用 Python 3.9 和 3.12 跑测试、构建静态站点和 wheel。工作流也可以把静态演示站发布到 GitHub Pages，本仓库暂时关闭了这一项。Fork 后想开启，把 **Settings → Pages → Source** 设为「GitHub Actions」即可。
+应用本身没有构建步骤，改完刷新就行。GitHub Actions 会在 macOS、Windows、Linux 上用 Python 3.9 和 3.12 跑测试、构建静态站点和 wheel；每次推送到 `main` 都会把在线演示发布到 GitHub Pages。Fork 后想开启在线演示，把 **Settings → Pages → Source** 设为「GitHub Actions」即可。
 
 ## 常见问题
 
@@ -407,7 +411,7 @@ python3 examples/simulate_events.py --post --live   # 给运行中的办公室�
 <details>
 <summary><b>收不到提醒</b></summary>
 
-先确认提醒已打开，再在 设置 → 提醒 里点「发一条测试提醒」，每个渠道成功与否都会显示出来。macOS 上请在 系统设置 → 通知 里允许「脚本编辑器」（通知是由它发出的）；钉钉用关键词校验的话，请加上关键词「Bot Office」。提醒依赖本机后台，静态演示站不会发提醒。
+先确认提醒已打开，再在 设置 → 提醒 里点「发一条测试提醒」，每个渠道成功与否都会显示出来。macOS 上请在 系统设置 → 通知 里允许「脚本编辑器」（通知是由它发出的）；钉钉用关键词校验的话，请加上关键词「Bot Office」。提醒依赖本机后台；在线演示只显示演示提醒，不会真的发送。
 </details>
 
 <details>
@@ -425,7 +429,7 @@ python3 examples/simulate_events.py --post --live   # 给运行中的办公室�
 <details>
 <summary><b>想分享截图又不想暴露对话内容</b></summary>
 
-在设置里打开隐私模式，所有消息和 bot 介绍都会被隐藏。也可以用 `--demo` 启动后再分享。
+在设置里打开隐私模式，所有消息和 bot 介绍都会被隐藏。也可以用 `--demo` 启动，或者直接分享[在线演示](https://olivia295.github.io/grokbot-teamwork-UI/)。
 </details>
 
 <details>

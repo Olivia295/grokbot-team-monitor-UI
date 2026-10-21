@@ -83,6 +83,11 @@ SCRIPTS = [
         ("demo-quill", "demo-echo", "最后再顺一遍", "One last read-through please"),
     ], ("感谢信写好了，可以直接发。", "The thank-you note is ready to send.")),
 ]
+# A handoff nobody picks up (no reply), so the "no pickup" alert and bottleneck rows have a live example.
+HANGING = ("user", "demo-concierge", ("帮我约下周和设计团队的评审", "Book a review with the design team next week"), [
+    ("demo-concierge", "demo-atlas", "需要约下周的设计评审", "Need a design review booked next week"),
+    ("demo-atlas", "demo-pixel", "下周哪天方便做评审？", "Which day next week works for the review?"),
+], None)
 AUTOMATIONS = [
     ("demo-radar", "morning-brief", "每日早报", "Morning brief"),
     ("demo-deepsea", "weekly-dive", "每周深挖", "Weekly deep dive"),
@@ -137,7 +142,7 @@ class _Builder:
                 self._push(receiver, {"kind": "event", "timestampMs": at, "requestId": turns[receiver],
                                       "event": {"type": "tool-error", "message": "timeout"}})
         at += rng.randint(20, 60) * 1000
-        if until is not None and at > until:
+        if reply is None or (until is not None and at > until):
             return
         self._push(steps[-1][1] if kind == "auto" else root, {"kind": "send-message", "timestampMs": at,
                    "requestId": turns.get(steps[-1][1] if kind == "auto" else root, f"{key}-end"),
@@ -158,10 +163,15 @@ def demo_cache(now_ms: int, language: str = "zh", anchor_ms: int | None = None) 
         builder.play(f"h{index}", script, at, random.Random(index))
         at += rng.randint(90, 220) * MIN
         index += 1
-    # Live: a new relay starts every two minutes and is played up to "now".
-    live_bucket = now_ms - now_ms % (2 * MIN)
-    live_script = SCRIPTS[(live_bucket // (2 * MIN)) % len(SCRIPTS)]
-    builder.play(f"live{live_bucket}", live_script, live_bucket - 40 * 1000, random.Random(live_bucket), until=now_ms)
+    builder.play("hang", HANGING, anchor - 16 * MIN, random.Random(7))
+    # Live: a new relay starts every two minutes and each plays up to "now" for eight minutes,
+    # long enough for slow teammates, retries and final replies to happen in front of you.
+    newest = now_ms - now_ms % (2 * MIN)
+    for live_bucket in range(newest - 3 * 2 * MIN, newest + 1, 2 * MIN):
+        if live_bucket - 40 * 1000 < anchor - 20 * MIN:
+            continue
+        live_script = SCRIPTS[(live_bucket // (2 * MIN)) % len(SCRIPTS)]
+        builder.play(f"live{live_bucket}", live_script, live_bucket - 40 * 1000, random.Random(live_bucket), until=now_ms)
     for agent, auto_id, zh, en in AUTOMATIONS:
         builder._push(agent, {"kind": "event", "timestampMs": anchor - 5 * DAY + len(auto_id) * HOUR,
                               "event": {"type": "automation-changed", "action": "created", "automationId": auto_id, "automationName": (zh, en)[lang]}})

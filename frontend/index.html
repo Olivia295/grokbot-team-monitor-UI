@@ -33,6 +33,7 @@
       <a class="icon-btn" id="tv-link" href="?tv=1" data-i18n-aria="tv.open" data-i18n-title="tv.open"><i data-icon="tv"></i></a>
       <button type="button" class="icon-btn lang-btn" id="lang" data-i18n="lang.switch" data-i18n-aria="aria.lang"></button>
       <button type="button" class="icon-btn" id="theme" data-i18n-aria="aria.theme"></button>
+      <button type="button" class="icon-btn tour-btn" id="tour-btn" data-i18n-aria="tour.open" data-i18n-title="tour.open">?</button>
       <a class="icon-btn" href="settings.html" data-i18n-aria="aria.settings" data-i18n-title="aria.settings"><i data-icon="gear"></i></a>
       <span class="pill" id="connection" role="status"></span>
     </div>
@@ -57,6 +58,7 @@
         <h2 id="internal-title" data-i18n="internal.title"></h2>
         <span class="muted" id="internal-stamp"></span>
       </div>
+      <p class="muted internal-intro" id="internal-intro" data-i18n="internal.introDemo" hidden></p>
       <div id="internal-body" class="internal-body"></div>
     </section>
 
@@ -190,6 +192,10 @@
     <p class="muted" id="export-status" role="status"></p>
     <div class="btn-row"><a class="primary-btn" id="export-save" download hidden></a><button type="button" class="small-btn" id="export-close" data-i18n="export.close"></button></div>
   </dialog>
+  <dialog class="export-dialog tasks-dialog" id="tasks-dialog" aria-labelledby="tasks-title">
+    <button type="button" class="icon-btn close" id="tasks-close" data-i18n-aria="aria.close">✕</button>
+    <div id="tasks-body"></div>
+  </dialog>
   <dialog class="drawer" id="profile" aria-labelledby="profile-name">
     <button type="button" class="icon-btn close" id="profile-close" data-i18n-aria="aria.close">✕</button>
     <div id="profile-body"></div>
@@ -204,6 +210,7 @@
   <script src="js/internal.js"></script>
   <script src="js/export.js"></script>
   <script src="js/tv.js"></script>
+  <script src="js/tour.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
