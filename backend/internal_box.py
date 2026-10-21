@@ -65,8 +65,8 @@ FOLDER_SLUGS = (
 LOG_NAMES = ("log.md", "dispatch-log.md", "evolution-log.md")
 PRIVATE_CHILD_NAMES = ("inbox", "snapshots", "raw")
 
-# 7-day line counter follows the collector: dates written as 2026-MM-DD.
-DATE_RE = re.compile(r"2026-\d{2}-\d{2}")
+# 7-day line counter: dates written as YYYY-MM-DD (any year, so it keeps working after 2026).
+DATE_RE = re.compile(r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)")
 # A task line may begin with any YYYY-MM-DD (Morning Bridge does this).
 DATE_ENTRY_RE = re.compile(r"\d{4}-\d{2}-\d{2}(?!\d)")
 SEPARATOR_CELL_RE = re.compile(r":?-{1,}:?")

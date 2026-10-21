@@ -114,5 +114,14 @@ class RemoteHostTest(unittest.TestCase):
         self.assertNotEqual(status, 302)
 
 
+
+class BoxDatesTest(unittest.TestCase):
+    def test_recent_log_lines_count_in_any_year(self):
+        from datetime import date
+        from backend.internal_box import count_recent_log_lines
+        text = "| 2027-01-03 | brief | Morning Bridge |\n- 2026-12-30 notes\n2025-01-01 old\nno date"
+        self.assertEqual(count_recent_log_lines(text, date(2027, 1, 4)), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
