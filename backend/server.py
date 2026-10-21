@@ -59,7 +59,7 @@ that the server printed when it started.</p>
 def allowed_hosts() -> set[str]:
     """Extra host names (besides loopback) the page may be opened from, e.g. the Grok Bot box's proxy."""
     return {name.strip().lower() for name in os.environ.get("BOT_OFFICE_ALLOWED_HOSTS", "").split(",") if name.strip()}
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 WATCHER = AlertWatcher()
 WINDOWS = {24, 168, 720}
 MIME = {
