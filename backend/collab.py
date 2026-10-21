@@ -12,16 +12,17 @@ from __future__ import annotations
 
 import hashlib
 import math
+import statistics
 from pathlib import Path
 
-
-from backend.grok_cache import Cache, app_online, load_cache
+from .grok_cache import Cache, app_online, load_cache
 
 ACTIVE_MS = 5 * 60 * 1000
 WRITING_MS = 90 * 1000
 HANDOFF_MS = 3 * 60 * 1000
 LIVE_WRITE_MS = 25 * 1000
 MATCH_MS = 5 * 60 * 1000
+UNANSWERED_MS = 30 * 60 * 1000
 FLOW_LIMIT = 80
 STEP_CHARS = 160
 TRIGGER_CHARS = 140
@@ -186,7 +187,7 @@ def office_from(cache: Cache, now_ms: int) -> dict:
     return {
         "generatedAt": now_ms,
         "sourceReady": bool(cache.roster),
-        "appOnline": app_online(cache.support, now_ms),
+        "appOnline": cache.online if cache.online is not None else app_online(cache.support, now_ms),
         "wings": wings,
         "agents": agents,
         "usage": cache.usage or None,
@@ -204,8 +205,15 @@ def _requests(cache: Cache):
         for index, entry in enumerate(entries):
             request_id = entry.get("requestId")
             key = (agent_id, request_id if isinstance(request_id, str) and request_id else f"entry:{entry.get('id', index)}")
-            turn = requests.setdefault(key, {"key": key, "agent": agent_id, "prompt": None, "replies": [], "outs": [], "ins": []})
+            turn = requests.setdefault(key, {"key": key, "agent": agent_id, "prompt": None, "replies": [], "outs": [], "ins": [],
+                                             "errors": [], "firstOut": 0})
             kind, role, at = entry.get("kind"), entry.get("role"), _stamp(entry)
+            if at and ((kind == "message" and role == "assistant" and not entry.get("isStreaming")) or (kind == "send-message" and _reply_text(entry))):
+                turn["firstOut"] = min(turn["firstOut"] or at, at)
+            if kind == "event":
+                event_type = str((entry.get("event") or {}).get("type") or "").lower() if isinstance(entry.get("event"), dict) else ""
+                if "error" in event_type or "fail" in event_type:
+                    turn["errors"].append(at)
             if kind == "message" and role == "user":
                 source = _ref(entry, "fromAgent")
                 if source:
@@ -276,8 +284,11 @@ def flows_from(cache: Cache, now_ms: int, hours: int = 24) -> dict:
             return
         seen.add(key)
         for out in sorted(turn["outs"], key=lambda m: m["at"]):
+            child = requests.get(out["child"]) if out["child"] else None
+            wait = child["firstOut"] - out["at"] if child and child["firstOut"] >= out["at"] else None
             steps.append({"kind": "handoff", "from": out["from"], "to": out["to"], "at": out["at"],
-                          "text": out["text"], "traced": out["child"] is not None, "depth": depth})
+                          "text": out["text"], "traced": out["child"] is not None, "depth": depth,
+                          "waitMs": wait, "failed": bool(child and child["errors"])})
             if out["child"]:
                 walk(out["child"], steps, seen, depth + 1)
         if turn["replies"]:
@@ -303,6 +314,12 @@ def flows_from(cache: Cache, now_ms: int, hours: int = 24) -> dict:
         walk(key, steps, seen)
         order = {id(step): index for index, step in enumerate(steps)}
         steps.sort(key=lambda step: (step["at"], order[id(step)]))
+        # The same sender handing the same receiver the work again inside one flow is a retry.
+        sent: set[tuple[str, str]] = set()
+        for step in steps:
+            if step["kind"] == "handoff":
+                step["retry"] = (step["from"], step["to"]) in sent
+                sent.add((step["from"], step["to"]))
 
         if orphan_ins:
             first = orphan_ins[0]
@@ -332,6 +349,8 @@ def flows_from(cache: Cache, now_ms: int, hours: int = 24) -> dict:
             "handoffCount": handoffs,
             "depth": max((s["depth"] for s in steps), default=0),
             "steps": steps,
+            "failed": any(s.get("failed") for s in steps),
+            "retries": sum(1 for s in steps if s.get("retry")),
         })
     flows.sort(key=lambda flow: flow["endedAt"], reverse=True)
 
@@ -340,14 +359,27 @@ def flows_from(cache: Cache, now_ms: int, hours: int = 24) -> dict:
         for step in flow["steps"]:
             if step["kind"] != "handoff":
                 continue
-            link = links.setdefault((step["from"], step["to"]), {"from": step["from"], "to": step["to"], "count": 0, "lastAt": 0})
+            link = links.setdefault((step["from"], step["to"]), {"from": step["from"], "to": step["to"], "count": 0, "lastAt": 0,
+                                                                 "waits": [], "failures": 0, "retries": 0, "unanswered": 0})
             link["count"] += 1
             link["lastAt"] = max(link["lastAt"], step["at"])
+            if step.get("waitMs") is not None:
+                link["waits"].append(step["waitMs"])
+            elif step["traced"] and not step.get("failed") and now_ms - step["at"] > UNANSWERED_MS:
+                link["unanswered"] += 1
+            link["failures"] += 1 if step.get("failed") else 0
+            link["retries"] += 1 if step.get("retry") else 0
     touches: dict[str, int] = {}
     for link in links.values():
         for agent_id in (link["from"], link["to"]):
             touches[agent_id] = touches.get(agent_id, 0) + link["count"]
     hub = max(touches, key=touches.get) if touches else None
+    bottleneck = _bottleneck(links, flows)
+    for link in links.values():
+        waits = link.pop("waits")
+        link["avgWaitMs"] = int(sum(waits) / len(waits)) if waits else None
+        link["maxWaitMs"] = max(waits) if waits else None
+        link["waitSamples"] = len(waits)
 
     return {
         "generatedAt": now_ms,
@@ -359,8 +391,65 @@ def flows_from(cache: Cache, now_ms: int, hours: int = 24) -> dict:
         "activeCount": sum(1 for flow in flows if flow["active"]),
         "links": sorted(links.values(), key=lambda link: link["count"], reverse=True),
         "hub": {"id": hub, "touches": touches[hub]} if hub else None,
+        "bottleneck": bottleneck,
+        "sources": _sources(flows),
         "external": [{"id": key, "name": value} for key, value in external.items()],
     }
+
+
+def _avg(values: list[int]) -> int | None:
+    return int(sum(values) / len(values)) if values else None
+
+
+def _bottleneck(links: dict, flows: list[dict]) -> dict:
+    """Where work waits: average reply time per handoff, the slowest link and bot, failures and retries."""
+    waits = [wait for link in links.values() for wait in link["waits"]]
+    handoffs = sum(link["count"] for link in links.values())
+    ranked = [link for link in links.values() if link["waits"]]
+    # Prefer links seen more than once, so one slow afternoon does not dominate.
+    steady = [link for link in ranked if len(link["waits"]) >= 2] or ranked
+    slowest = max(steady, key=lambda link: _avg(link["waits"]), default=None)
+    by_bot: dict[str, list[int]] = {}
+    for link in links.values():
+        by_bot.setdefault(link["to"], []).extend(link["waits"])
+    bots = [(bot_id, values) for bot_id, values in by_bot.items() if values]
+    slow_bot = max(bots, key=lambda item: _avg(item[1]), default=None)
+    fast_bot = min(bots, key=lambda item: _avg(item[1]), default=None)
+    failures = sum(link["failures"] for link in links.values())
+    retries = sum(link["retries"] for link in links.values())
+    durations = sorted(flow["endedAt"] - flow["startedAt"] for flow in flows if flow["handoffCount"])
+    return {
+        "handoffs": handoffs,
+        "samples": len(waits),
+        "avgWaitMs": _avg(waits),
+        "medianWaitMs": int(statistics.median(waits)) if waits else None,
+        "slowest": {"from": slowest["from"], "to": slowest["to"], "avgWaitMs": _avg(slowest["waits"]),
+                    "count": slowest["count"]} if slowest else None,
+        "slowestBot": {"id": slow_bot[0], "avgWaitMs": _avg(slow_bot[1]), "count": len(slow_bot[1])} if slow_bot else None,
+        "fastestBot": {"id": fast_bot[0], "avgWaitMs": _avg(fast_bot[1]), "count": len(fast_bot[1])} if fast_bot and len(bots) > 1 else None,
+        "failures": failures,
+        "failureRate": failures / handoffs if handoffs else 0,
+        "retries": retries,
+        "retryRate": retries / handoffs if handoffs else 0,
+        "unanswered": sum(link["unanswered"] for link in links.values()),
+        "medianFlowMs": int(statistics.median(durations)) if durations else None,
+        "failedFlows": sum(1 for flow in flows if flow["failed"]),
+    }
+
+
+def _sources(flows: list[dict]) -> list[dict]:
+    """Where work enters (you or a schedule hands it to a bot) and leaves (a bot replies to you), for the Sankey."""
+    counts: dict[tuple[str, str], int] = {}
+    for flow in flows:
+        trigger = flow["trigger"]
+        if trigger["kind"] != "agent":  # bot-started flows are already counted as handoffs
+            key = (trigger["agentId"], flow["rootAgentId"])
+            counts[key] = counts.get(key, 0) + 1
+        for step in flow["steps"]:
+            if step["kind"] == "reply":
+                key = (step["from"], YOU)
+                counts[key] = counts.get(key, 0) + 1
+    return [{"from": a, "to": b, "count": n} for (a, b), n in sorted(counts.items(), key=lambda item: -item[1])]
 
 
 def load_office(support: Path | None = None, now_ms: int | None = None) -> dict:

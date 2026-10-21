@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Bot Office</title>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/css/app.css">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
   <header class="top">
@@ -19,9 +19,14 @@
         <button type="button" data-hours="168" aria-pressed="false" data-i18n="window.168"></button>
         <button type="button" data-hours="720" aria-pressed="false" data-i18n="window.720"></button>
       </div>
+      <div class="bell-wrap">
+        <button type="button" class="icon-btn" id="bell" data-i18n-aria="alerts.title" data-i18n-title="alerts.title" aria-expanded="false" aria-controls="bell-panel"><i data-icon="bell"></i><span class="bell-dot" id="bell-dot" hidden></span></button>
+        <div class="bell-panel card" id="bell-panel" hidden></div>
+      </div>
+      <a class="icon-btn" id="tv-link" href="?tv=1" data-i18n-aria="tv.open" data-i18n-title="tv.open"><i data-icon="tv"></i></a>
       <button type="button" class="icon-btn lang-btn" id="lang" data-i18n="lang.switch" data-i18n-aria="aria.lang"></button>
       <button type="button" class="icon-btn" id="theme" data-i18n-aria="aria.theme"></button>
-      <a class="icon-btn" href="/settings" data-i18n-aria="aria.settings" data-i18n-title="aria.settings"><i data-icon="gear"></i></a>
+      <a class="icon-btn" href="settings.html" data-i18n-aria="aria.settings" data-i18n-title="aria.settings"><i data-icon="gear"></i></a>
       <span class="pill" id="connection" role="status"></span>
     </div>
   </header>
@@ -64,6 +69,8 @@
             <button type="button" id="replay-play" data-i18n-aria="replay.play">▶</button>
             <button type="button" id="replay-next" data-i18n-aria="replay.next">›</button>
             <button type="button" id="replay-speed" data-i18n-aria="replay.speed">1×</button>
+            <button type="button" id="replay-link" data-i18n-aria="replay.link" data-i18n-title="replay.link"><i data-icon="link"></i></button>
+            <button type="button" id="replay-gif" data-i18n-aria="replay.gif" data-i18n-title="replay.gif"><i data-icon="film"></i></button>
           </div>
         </div>
         <div class="stage-body" id="stage-body">
@@ -84,12 +91,18 @@
             <button type="button" role="tab" data-side="feed" aria-selected="false" data-i18n="side.feed"></button>
           </div>
           <div id="flows-pane">
+            <div class="flow-search">
+              <label class="search-box"><i data-icon="search"></i><input type="search" id="flow-q" data-i18n-placeholder="search.placeholder" data-i18n-aria="search.placeholder" autocomplete="off" spellcheck="false"></label>
+              <select id="flow-bot" data-i18n-aria="search.bot"></select>
+            </div>
             <div class="chips" role="group" data-i18n-aria="aria.filter">
               <button type="button" data-filter="all" aria-pressed="true" data-i18n="filter.all"></button>
               <button type="button" data-filter="user" aria-pressed="false" data-i18n="filter.user"></button>
               <button type="button" data-filter="automation" aria-pressed="false" data-i18n="filter.automation"></button>
               <button type="button" data-filter="active" aria-pressed="false" data-i18n="filter.active"></button>
+              <button type="button" data-filter="trouble" aria-pressed="false" data-i18n="filter.trouble"></button>
             </div>
+            <p class="search-note muted" id="search-note" hidden></p>
             <ol class="flow-list" id="flow-list"><li class="empty" data-i18n="loading"></li></ol>
           </div>
           <div id="pairs-pane" hidden><p class="pane-note muted" data-i18n="pairs.note"></p><ol class="pairs-list" id="pairs-list"></ol></div>
@@ -113,11 +126,23 @@
           <header><h3><i data-icon="digest"></i><span data-i18n="digest.title"></span></h3>
             <div class="mini-seg" role="group" data-i18n-aria="digest.title"><button type="button" data-digest="0" aria-pressed="true" data-i18n="time.today"></button><button type="button" data-digest="1" aria-pressed="false" data-i18n="time.yesterday"></button></div></header>
           <div id="digest"></div>
-          <button type="button" class="small-btn" id="digest-copy" data-i18n="digest.copy"></button>
+          <div class="btn-row">
+            <button type="button" class="small-btn" id="digest-copy" data-i18n="digest.copy"></button>
+            <button type="button" class="small-btn" id="week-md"><i data-icon="download"></i> <span data-i18n="week.md"></span></button>
+            <button type="button" class="small-btn" id="week-png"><i data-icon="image"></i> <span data-i18n="week.png"></span></button>
+          </div>
         </article>
         <article class="card insight">
           <header><h3><i data-icon="clock"></i><span data-i18n="autos.title"></span> <span class="count" id="autos-count"></span></h3></header>
           <div id="automations"></div>
+        </article>
+        <article class="card insight wide" id="bottleneck-card">
+          <header><h3><i data-icon="flow"></i><span data-i18n="neck.title"></span></h3><span class="muted" id="neck-note"></span></header>
+          <div class="neck-kpis" id="neck-kpis"></div>
+          <div class="neck-body">
+            <div class="sankey-wrap"><svg id="sankey" role="img" data-i18n-aria="neck.sankey"></svg></div>
+            <div class="neck-links" id="neck-links"></div>
+          </div>
         </article>
         <article class="card insight wide">
           <header><h3><i data-icon="grid"></i><span data-i18n="rhythm.title"></span></h3><span class="muted" data-i18n="rhythm.note"></span></header>
@@ -130,20 +155,39 @@
       <div class="section-title"><h2 id="roster-title"><i data-icon="team" data-size="18"></i> <span data-i18n="roster.title"></span></h2><span class="muted" data-i18n="roster.note"></span></div>
       <div class="roster" id="roster"></div>
     </section>
-    <footer class="foot muted"><span class="live-dot"></span><span id="freshness"></span><span class="spacer"></span><a href="/settings" data-i18n="foot.settings"></a></footer>
+    <footer class="foot muted"><span class="live-dot"></span><span id="freshness"></span><span class="spacer"></span><a href="settings.html" data-i18n="foot.settings"></a></footer>
   </main>
 
+  <div class="tv-bar" id="tv-bar" hidden>
+    <span class="brand-logo" id="tv-logo"></span>
+    <b id="tv-title"></b>
+    <span class="tv-view" id="tv-view"></span>
+    <span class="spacer"></span>
+    <span class="tv-kpis" id="tv-kpis"></span>
+    <time class="tv-clock" id="tv-clock"></time>
+    <button type="button" class="icon-btn" id="tv-full" data-i18n-aria="tv.fullscreen" data-i18n-title="tv.fullscreen"><i data-icon="expand"></i></button>
+    <a class="icon-btn" id="tv-exit" href="./" data-i18n-aria="tv.exit" data-i18n-title="tv.exit">✕</a>
+  </div>
+  <div class="tv-ticker" id="tv-ticker" hidden><div class="tv-track" id="tv-track"></div></div>
+  <dialog class="export-dialog" id="export-dialog" aria-labelledby="export-title">
+    <h3 id="export-title"></h3>
+    <div class="export-preview" id="export-preview"></div>
+    <p class="muted" id="export-status" role="status"></p>
+    <div class="btn-row"><a class="primary-btn" id="export-save" download hidden></a><button type="button" class="small-btn" id="export-close" data-i18n="export.close"></button></div>
+  </dialog>
   <dialog class="drawer" id="profile" aria-labelledby="profile-name">
     <button type="button" class="icon-btn close" id="profile-close" data-i18n-aria="aria.close">✕</button>
     <div id="profile-body"></div>
   </dialog>
   <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
 
-  <script src="/js/i18n.js"></script>
-  <script src="/js/avatars.js"></script>
-  <script src="/js/common.js"></script>
-  <script src="/js/stage.js"></script>
-  <script src="/js/panels.js"></script>
-  <script src="/js/main.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/avatars.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/stage.js"></script>
+  <script src="js/panels.js"></script>
+  <script src="js/export.js"></script>
+  <script src="js/tv.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>

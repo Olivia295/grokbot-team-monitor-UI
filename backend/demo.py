@@ -10,7 +10,7 @@ from __future__ import annotations
 import random
 from pathlib import Path
 
-from backend.grok_cache import Cache
+from .grok_cache import Cache
 
 MIN = 60 * 1000
 HOUR = 60 * MIN
@@ -35,8 +35,10 @@ SECTIONS = [
     ("demo-intel", "情报站", "Intel", ["demo-scout", "demo-radar", "demo-deepsea"]),
 ]
 PINNED = ["demo-concierge"]
+SLOW = {"demo-deepsea": 3, "demo-pixel": 2}
 
-# Each script: trigger ("user" | "auto"), root bot, ask (zh, en), steps [(from, to, zh, en)], reply (zh, en).
+# Each script: trigger ("user" | "auto"), root bot, ask (zh, en), steps [(from, to, zh, en[, "fail"])], reply (zh, en).
+# A "fail" step errors out on the receiver's side; the next step is usually the retry.
 SCRIPTS = [
     ("user", "demo-atlas", ("帮我准备下周发布会的材料", "Get the launch materials ready for next week"), [
         ("demo-atlas", "demo-scout", "查一下竞品最近一周的动态", "Check what competitors shipped this week"),
@@ -68,6 +70,13 @@ SCRIPTS = [
         ("demo-ledger", "demo-atlas", "还有两件待确认", "Two items still need sign-off"),
         ("demo-atlas", "demo-concierge", "两件事需要你拍板", "Two decisions are waiting for you"),
     ], ("有两件事等你确认：预算和发布时间。", "Two things need your call: budget and launch date.")),
+    ("user", "demo-atlas", ("把上周的数据做成图表", "Turn last week's numbers into a chart"), [
+        ("demo-atlas", "demo-deepsea", "先把上周的数据拉出来", "Pull last week's numbers first"),
+        ("demo-deepsea", "demo-pixel", "按这份数据画个趋势图", "Plot a trend chart from this data", "fail"),
+        ("demo-deepsea", "demo-pixel", "再试一次，我把表格简化了", "Trying again with a simpler table"),
+        ("demo-pixel", "demo-deepsea", "图做好了", "Chart is done"),
+        ("demo-deepsea", "demo-atlas", "数据和图表都在这", "Numbers and chart attached"),
+    ], ("图表做好了：上周增长 12%。", "Chart's ready: up 12% last week.")),
     ("user", "demo-quill", ("写一封给合作方的感谢信", "Write a thank-you note to our partners"), [
         ("demo-quill", "demo-spark", "开头想个有意思的点", "Need a fun opening line"),
         ("demo-spark", "demo-quill", "用他们的吉祥物开场", "Open with their mascot"),
@@ -110,15 +119,23 @@ class _Builder:
             self._push(root, {"kind": "message", "role": "user", "timestampMs": at, "requestId": turns[root],
                               "content": ask[self.lang], "isStreaming": False})
         for sender, receiver, *texts in steps:
-            at += rng.randint(25, 95) * 1000
+            # Some teammates are slower to answer, so the bottleneck view has something to find.
+            at += rng.randint(25, 95) * 1000 * SLOW.get(sender, 1)
             if until is not None and at > until:
                 return
             text = texts[self.lang]
+            failed = len(texts) > 2 and texts[2] == "fail"
             names = {bot[0]: bot[1 + self.lang] for bot in BOTS}
             self._push(sender, {"kind": "message", "role": "assistant", "timestampMs": at, "requestId": turns.get(sender) or new_turn(sender),
                                 "content": text, "isStreaming": False, "toAgent": {"id": receiver, "name": names[receiver], "kind": "agent"}})
             self._push(receiver, {"kind": "message", "role": "user", "timestampMs": at + 400, "requestId": new_turn(receiver),
                                   "content": text, "isStreaming": False, "fromAgent": {"id": sender, "name": names[sender]}})
+            if failed:
+                at += rng.randint(20, 50) * 1000
+                if until is not None and at > until:
+                    return
+                self._push(receiver, {"kind": "event", "timestampMs": at, "requestId": turns[receiver],
+                                      "event": {"type": "tool-error", "message": "timeout"}})
         at += rng.randint(20, 60) * 1000
         if until is not None and at > until:
             return
@@ -127,11 +144,12 @@ class _Builder:
                    "message": {"type": "text", "content": reply[self.lang]}})
 
 
-def demo_cache(now_ms: int, language: str = "zh") -> Cache:
+def demo_cache(now_ms: int, language: str = "zh", anchor_ms: int | None = None) -> Cache:
     lang = 1 if language == "en" else 0
     builder = _Builder(lang)
-    # History: one relay every ~2.5 hours over the last week, stable within a 10-minute bucket.
-    anchor = now_ms - now_ms % (10 * MIN)
+    # History: one relay every ~2.5 hours over the last week, stable within a 10-minute bucket
+    # (or pinned to anchor_ms, which the static site build uses to keep frames consistent).
+    anchor = anchor_ms if anchor_ms is not None else now_ms - now_ms % (10 * MIN)
     rng = random.Random(anchor // DAY)
     at = anchor - 7 * DAY
     index = 0
@@ -166,4 +184,5 @@ def demo_cache(now_ms: int, language: str = "zh") -> Cache:
     cache.usage = {"percentUsed": 42.0, "nextResetMs": anchor + 3 * DAY, "plan": "SuperGrok"}
     cache.transcripts = {bot_id: (entries, now_ms - 60 * 1000) for bot_id, entries in builder.entries.items()}
     cache.demo = True
+    cache.source = "demo"
     return cache

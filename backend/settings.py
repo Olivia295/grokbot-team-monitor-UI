@@ -1,7 +1,8 @@
 """Local settings for the collaboration room.
 
-Stored as JSON next to the project (data/settings.json, git-ignored) or wherever
-GROK_COLLAB_SETTINGS points. Nothing here is ever written into Grok Bot's own files.
+Stored as JSON next to the project (data/settings.json, git-ignored) when run from a
+checkout, in the user's app-data folder when installed with pip/pipx/uvx/Homebrew, or
+wherever GROK_COLLAB_SETTINGS points. Nothing here is ever written into Grok Bot's own files.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ import copy
 import json
 import os
 import re
+import sys
 import tempfile
 from pathlib import Path
 
@@ -18,7 +20,9 @@ ROOT = Path(__file__).resolve().parents[1]
 LANGUAGES = {"auto", "zh", "en"}
 THEMES = {"auto", "light", "dark"}
 MOTIONS = {"full", "calm", "off"}
-SOURCES = {"auto", "grok", "demo"}
+SOURCES = {"auto", "grok", "events", "demo"}
+HOOK_KINDS = {"slack", "discord", "feishu", "dingtalk", "generic"}
+MAX_HOOKS = 8
 WINDOWS = {24, 168, 720}
 LOOK_KEYS = {"shape", "color", "eyes", "mouth", "hat", "item", "outfit"}
 TOKEN = re.compile(r"^[a-z0-9-]{1,24}$")
@@ -35,6 +39,22 @@ DEFAULTS = {
     "refreshSeconds": 3,
     "dataSource": "auto",
     "supportDir": "",
+    "eventsPath": "",
+    "tvSeconds": 20,
+    "alerts": {
+        "enabled": False,
+        "desktop": True,
+        "error": True,
+        "awaiting": True,
+        "stuck": True,
+        "done": False,
+        "stuckMinutes": 10,
+        "cooldownMinutes": 15,
+        "quiet": False,
+        "quietFrom": 23,
+        "quietTo": 8,
+        "webhooks": [],
+    },
     "rooms": {},
     "bots": {},
 }
@@ -44,9 +64,21 @@ class SettingsError(ValueError):
     pass
 
 
+def data_dir() -> Path:
+    """data/ in a source checkout; the per-user app-data folder when installed as a package."""
+    if (ROOT / "pyproject.toml").exists() or (ROOT / ".git").exists():
+        return ROOT / "data"
+    home = Path.home()
+    if sys.platform == "darwin":
+        return home / "Library" / "Application Support" / "Bot Office"
+    if os.name == "nt":
+        return Path(os.environ.get("APPDATA") or home / "AppData" / "Roaming") / "Bot Office"
+    return Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config") / "bot-office"
+
+
 def settings_path() -> Path:
     override = os.environ.get("GROK_COLLAB_SETTINGS", "").strip()
-    return Path(override).expanduser() if override else ROOT / "data" / "settings.json"
+    return Path(override).expanduser() if override else data_dir() / "settings.json"
 
 
 def _text(value, limit: int) -> str:
@@ -59,6 +91,38 @@ def _clean_look(look) -> dict:
     if not isinstance(look, dict):
         return {}
     return {key: value for key, value in look.items() if key in LOOK_KEYS and isinstance(value, str) and TOKEN.match(value)}
+
+
+def _clean_hook(hook) -> dict | None:
+    if not isinstance(hook, dict):
+        return None
+    url = hook.get("url").strip() if isinstance(hook.get("url"), str) else ""
+    local = url.startswith(("http://127.0.0.1", "http://localhost"))
+    if not url or len(url) > 600 or not (url.startswith("https://") or local) or any(c.isspace() for c in url):
+        return None
+    out = {"kind": hook.get("kind") if hook.get("kind") in HOOK_KINDS else "generic", "url": url,
+           "enabled": hook.get("enabled") is not False}
+    if _text(hook.get("name"), 40):
+        out["name"] = _text(hook.get("name"), 40)
+    if isinstance(hook.get("secret"), str) and hook["secret"].strip():
+        out["secret"] = hook["secret"].strip()[:200]
+    return out
+
+
+def _clean_alerts(raw) -> dict:
+    out = copy.deepcopy(DEFAULTS["alerts"])
+    if not isinstance(raw, dict):
+        return out
+    for key in ("enabled", "desktop", "error", "awaiting", "stuck", "done", "quiet"):
+        if isinstance(raw.get(key), bool):
+            out[key] = raw[key]
+    for key, low, high in (("stuckMinutes", 1, 720), ("cooldownMinutes", 0, 1440), ("quietFrom", 0, 23), ("quietTo", 0, 23)):
+        value = raw.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and low <= value <= high:
+            out[key] = value
+    hooks = raw.get("webhooks") if isinstance(raw.get("webhooks"), list) else []
+    out["webhooks"] = [hook for hook in (_clean_hook(item) for item in hooks[:MAX_HOOKS]) if hook]
+    return out
 
 
 def clean(raw) -> dict:
@@ -83,6 +147,10 @@ def clean(raw) -> dict:
     if raw.get("dataSource") in SOURCES:
         out["dataSource"] = raw["dataSource"]
     out["supportDir"] = _text(raw.get("supportDir"), 512)
+    out["eventsPath"] = _text(raw.get("eventsPath"), 512)
+    if isinstance(raw.get("tvSeconds"), int) and 5 <= raw["tvSeconds"] <= 600:
+        out["tvSeconds"] = raw["tvSeconds"]
+    out["alerts"] = _clean_alerts(raw.get("alerts"))
 
     rooms = raw.get("rooms") if isinstance(raw.get("rooms"), dict) else {}
     for room_id, room in list(rooms.items())[:MAX_ENTRIES]:

@@ -14,7 +14,7 @@ function renderHero() {
   const busy = office.agents.filter(isBusy);
   $("#greeting").textContent = `${greeting()} · ${t("hero.count", { n: office.agents.length })}`;
   const live = flows?.activeCount || 0;
-  $("#hero-title").innerHTML = live ? t(live === 1 ? "hero.liveOne" : "hero.live", { n: `<em>${live}</em>` }) : busy.length ? esc(t("hero.busy", { n: busy.length })) : esc(t("hero.idle"));
+  $("#hero-title").innerHTML = live ? t(live === 1 ? "hero.liveOne" : "hero.live", { n: `<em>${live}</em>` }) : busy.length ? esc(t(busy.length === 1 ? "hero.busyOne" : "hero.busy", { n: busy.length })) : esc(t("hero.idle"));
   $("#tiles").innerHTML = [
     [flows?.flowCount ?? "—", t("tile.flows", { window: windowLabel(S.hours) })],
     [flows?.handoffCount ?? "—", t("tile.handoffs")],
@@ -97,11 +97,43 @@ function renderAwards() {
 
 // ---------------------------------------------------------------- flows & feed
 
+function flowTrouble(flow) {
+  return flow.failed || flow.retries > 0 || flow.steps.some((step) => step.kind === "handoff" && !step.traced);
+}
 function flowMatches(flow) {
-  if (S.filter === "user") return flow.trigger.kind === "user";
-  if (S.filter === "automation") return flow.trigger.kind === "automation";
-  if (S.filter === "active") return flow.active;
-  return true;
+  if (S.filter === "user" && flow.trigger.kind !== "user") return false;
+  if (S.filter === "automation" && flow.trigger.kind !== "automation") return false;
+  if (S.filter === "active" && !flow.active) return false;
+  if (S.filter === "trouble" && !flowTrouble(flow)) return false;
+  if (S.botFilter && !flow.participants.includes(S.botFilter)) return false;
+  if (S.pairFilter) {
+    const [a, b] = S.pairFilter.split("|");
+    if (!flow.steps.some((step) => step.kind === "handoff" && step.from === a && step.to === b)) return false;
+  }
+  const query = (S.query || "").trim().toLowerCase();
+  if (!query) return true;
+  const haystack = [flowAsk(flow), ...flow.steps.map((step) => step.text), ...flow.participants.map(nameOf)].join("\n").toLowerCase();
+  return query.split(/\s+/).every((word) => haystack.includes(word));
+}
+function highlight(text) {
+  const words = (S.query || "").trim().split(/\s+/).filter(Boolean).map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const safe = esc(text);
+  if (!words.length) return safe;
+  return safe.replace(new RegExp(`(${words.map(esc).join("|")})`, "gi"), "<mark>$1</mark>");
+}
+function fillBotFilter() {
+  const select = $("#flow-bot");
+  if (!select || !S.flows) return;
+  const ids = new Set();
+  for (const flow of S.flows.flows) for (const id of flow.participants) if (kindOf(id) === "agent") ids.add(id);
+  if (S.botFilter) ids.add(S.botFilter);
+  const options = [...ids].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+  const sig = `${S.lang}|${options.join(",")}`;
+  if (select.dataset.sig !== sig) {
+    select.dataset.sig = sig;
+    select.innerHTML = `<option value="">${esc(t("search.anyBot"))}</option>` + options.map((id) => `<option value="${esc(id)}">${esc(nameOf(id))}</option>`).join("");
+  }
+  select.value = S.botFilter || "";
 }
 function chainMarkup(flow, limit = 8) {
   const ids = flow.participants.filter((id) => id !== "you" || flow.trigger.kind === "user");
@@ -111,16 +143,24 @@ function chainMarkup(flow, limit = 8) {
 }
 function renderFlowList() {
   if (!S.flows) return;
+  fillBotFilter();
   const flows = S.flows.flows.filter(flowMatches);
   $("#flow-count").textContent = S.flows.flowCount ? `${S.flows.flowCount}` : "";
+  const filtering = Boolean((S.query || "").trim() || S.botFilter || S.pairFilter);
+  const note = $("#search-note");
+  if (note) {
+    note.hidden = !filtering;
+    const pair = S.pairFilter ? S.pairFilter.split("|") : null;
+    note.innerHTML = filtering ? `${t("search.found", { n: flows.length })}${pair ? ` · <span class="chip">${esc(nameOf(pair[0]))} → ${esc(nameOf(pair[1]))}</span>` : ""} <button type="button" class="link-btn" data-clear-search>${t("search.clear")}</button>` : "";
+  }
   const list = $("#flow-list");
   if (!flows.length) {
-    list.innerHTML = `<li class="empty">${t(S.filter === "all" ? "flows.none" : "flows.noneFiltered")}${S.hours < 720 ? `<br><button type="button" data-widen>${t("flows.widen")}</button>` : ""}</li>`;
+    list.innerHTML = `<li class="empty">${t(S.filter === "all" && !filtering ? "flows.none" : "flows.noneFiltered")}${S.hours < 720 ? `<br><button type="button" data-widen>${t("flows.widen")}</button>` : ""}</li>`;
     return;
   }
   list.innerHTML = flows.map((flow) => `<li><button type="button" class="flow-card ${ambient.flowId === flow.id ? "ambient" : ""}" data-flow="${flow.id}">
-      <span class="meta">${flow.active ? `<span class="chip live">${t("chip.active")}</span>` : ""}${triggerChip(flow)}<span>${ago(flow.endedAt)}</span><span>· ${t("flows.handoffs", { n: flow.handoffCount })}</span><span>· ${span(flow.endedAt - flow.startedAt)}</span></span>
-      <span class="ask">${esc(flowAsk(flow))}</span>
+      <span class="meta">${flow.active ? `<span class="chip live">${t("chip.active")}</span>` : ""}${triggerChip(flow)}${flow.failed ? `<span class="chip warn">⚠ ${t("chip.failed")}</span>` : ""}${flow.retries ? `<span class="chip">↻ ${flow.retries}</span>` : ""}<span>${ago(flow.endedAt)}</span><span>· ${t("flows.handoffs", { n: flow.handoffCount })}</span><span>· ${span(flow.endedAt - flow.startedAt)}</span></span>
+      <span class="ask">${highlight(flowAsk(flow))}</span>
       ${chainMarkup(flow)}
     </button></li>`).join("");
 }
@@ -144,9 +184,18 @@ function showFlowDetail(flow) {
     <div class="cast">${flow.participants.map((id) => `<button type="button" ${kindOf(id) === "agent" ? `data-profile="${esc(id)}"` : "disabled"}>${avatar(id, 26)}${esc(nameOf(id))}</button>`).join("")}</div>
     <ol class="relay">${steps.map((step, i) => `<li data-step="${i}" style="--c:${colorVar(step.from)};margin-left:${Math.min(step.depth, 4) * 12}px">
         <div class="row"><span class="t">${plus((step.at || flow.startedAt) - flow.startedAt)}</span>${avatar(step.from, 26)}<span class="muted">→</span>${avatar(step.to, 26)}<span class="who"><b>${esc(nameOf(step.from))}</b> ${esc(stepVerb(step))} <b>${esc(nameOf(step.to))}</b></span></div>
-        <div class="text">${esc(stepText(step))}</div>
+        <div class="text">${highlight(stepText(step))}</div>
+        ${stepBadges(step)}
         ${step.kind === "handoff" && !step.traced ? `<div class="note">${t("detail.untraced")}</div>` : ""}
       </li>`).join("")}</ol>`;
+}
+function stepBadges(step) {
+  if (step.kind !== "handoff") return "";
+  const badges = [];
+  if (step.waitMs != null) badges.push(`<span class="badge ${step.waitMs > 3 * 60e3 ? "slow" : ""}">⏱ ${t("detail.waited", { t: span(step.waitMs) })}</span>`);
+  if (step.failed) badges.push(`<span class="badge warn">⚠ ${t("detail.failed")}</span>`);
+  if (step.retry) badges.push(`<span class="badge">↻ ${t("detail.retry")}</span>`);
+  return badges.length ? `<div class="badges">${badges.join("")}</div>` : "";
 }
 function hideFlowDetail() {
   $("#side-detail").hidden = true;
@@ -398,7 +447,7 @@ function openProfile(id) {
       <div class="sub">${agent?.title ? `<span class="p-title">${esc(agent.title)}</span>` : ""}<span class="dot" style="background:${color}"></span>${esc(agent ? roomName(wingOf(agent)) : t("profile.notInOffice"))}${days ? ` · ${t("profile.days", { n: days })}` : ""}</div>
       <div class="sub">${agent ? `<span class="state ${isBusy(agent) ? "busy" : ""}">${esc(stateText(agent))}</span> ${esc(detailText(agent))}` : ""}${agent?.lastActivityAt ? ` · ${t("profile.last", { when: ago(agent.lastActivityAt) })}` : ""}</div>
       ${level ? `<div class="p-xp"><span class="lv">Lv${level.level}</span><div class="xp"><i style="width:${Math.round(level.progress * 100)}%"></i></div><span>${t("profile.toNext", { n: level.toNext })}</span></div>` : ""}
-      <a class="btn-link" href="/settings#bot=${encodeURIComponent(id)}">🎨 ${t("profile.customize")}</a>
+      <a class="btn-link" href="settings.html#bot=${encodeURIComponent(id)}">🎨 ${t("profile.customize")}</a>
     </div></div>
     <div class="p-inner">
     ${profile?.description ? `<p class="p-desc" id="p-desc">${esc(masked(profile.description))}</p><button type="button" class="ghost" id="p-more">${t("profile.more")}</button>` : ""}
@@ -435,4 +484,167 @@ function showToast(step) {
     node.classList.add("out");
     setTimeout(() => node.remove(), 320);
   }, 5200);
+}
+
+function showToastText(text) {
+  const box = $("#toasts");
+  const node = document.createElement("div");
+  node.className = "toast plain";
+  node.innerHTML = `<div style="min-width:0"><b>${esc(text)}</b></div>`;
+  box.prepend(node);
+  while (box.children.length > 3) box.lastElementChild.remove();
+  setTimeout(() => {
+    node.classList.add("out");
+    setTimeout(() => node.remove(), 320);
+  }, 3200);
+}
+function showAlertToast(alert) {
+  const box = $("#toasts");
+  const node = document.createElement("div");
+  node.className = "toast alert";
+  node.style.setProperty("--c", alert.kind === "error" ? "var(--warn)" : "var(--accent)");
+  node.innerHTML = `${alert.bot ? avatar(alert.bot, 34) : `<span class="icon">${ALERT_ICONS[alert.kind] || "🔔"}</span>`}<div style="min-width:0"><b>${ALERT_ICONS[alert.kind] || "🔔"} ${esc(alert.title)}</b><span>${esc(cut(alert.body, 70))}</span></div>`;
+  box.prepend(node);
+  while (box.children.length > 3) box.lastElementChild.remove();
+  setTimeout(() => {
+    node.classList.add("out");
+    setTimeout(() => node.remove(), 320);
+  }, 8000);
+}
+
+// ---------------------------------------------------------------- bottlenecks & Sankey
+
+function renderBottleneck() {
+  const flows = S.flows;
+  if (!flows || !$("#neck-kpis")) return;
+  const neck = flows.bottleneck || {};
+  $("#neck-note").textContent = t("neck.note", { window: windowLabel(S.hours), n: neck.handoffs || 0 });
+  const tile = (label, value, sub = "", tone = "") => `<div class="neck-kpi ${tone}"><span>${esc(label)}</span><b>${value}</b><small>${sub}</small></div>`;
+  const who = (ids) => ids.map((id) => avatar(id, 20)).join("");
+  $("#neck-kpis").innerHTML = !neck.handoffs ? `<p class="muted">${t("neck.none")}</p>` : [
+    tile(t("neck.median"), neck.medianWaitMs != null ? esc(span(neck.medianWaitMs)) : "—", neck.avgWaitMs != null ? esc(t("neck.avg", { t: span(neck.avgWaitMs) })) : ""),
+    tile(t("neck.slowestLink"), neck.slowest ? esc(span(neck.slowest.avgWaitMs)) : "—",
+      neck.slowest ? `${who([neck.slowest.from, neck.slowest.to])} ${esc(nameOf(neck.slowest.from))} → ${esc(nameOf(neck.slowest.to))}` : "", "slow"),
+    tile(t("neck.slowestBot"), neck.slowestBot ? esc(span(neck.slowestBot.avgWaitMs)) : "—",
+      neck.slowestBot ? `${who([neck.slowestBot.id])} ${esc(nameOf(neck.slowestBot.id))}` : ""),
+    tile(t("neck.failure"), pct(neck.failureRate), esc(t("neck.failures", { n: neck.failures, flows: neck.failedFlows })), neck.failureRate > 0.1 ? "warn" : ""),
+    tile(t("neck.retry"), pct(neck.retryRate), esc(t("neck.retries", { n: neck.retries }))),
+    tile(t("neck.unanswered"), String(neck.unanswered || 0), esc(t("neck.unansweredSub"))),
+  ].join("");
+  renderSankey();
+  const ranked = (flows.links || []).filter((link) => link.avgWaitMs != null).sort((a, b) => b.avgWaitMs - a.avgWaitMs).slice(0, 6);
+  const max = Math.max(1, ...ranked.map((link) => link.avgWaitMs));
+  $("#neck-links").innerHTML = ranked.length ? `<h4>${t("neck.linksTitle")}</h4><ol>${ranked.map((link) => `<li><button type="button" data-pair-filter="${esc(link.from)}|${esc(link.to)}" title="${esc(t("neck.filterHint"))}">
+      <span class="duo">${avatar(link.from, 26)}${avatar(link.to, 26)}</span>
+      <span class="neck-name">${esc(nameOf(link.from))} → ${esc(nameOf(link.to))}<small>×${link.count}${link.failures ? ` · ⚠ ${link.failures}` : ""}${link.retries ? ` · ↻ ${link.retries}` : ""}</small></span>
+      <span class="bar"><i style="width:${(link.avgWaitMs / max) * 100}%"></i></span><b>${esc(span(link.avgWaitMs))}</b>
+    </button></li>`).join("")}</ol>` : "";
+}
+
+function renderSankey() {
+  const svg = $("#sankey");
+  const flows = S.flows;
+  const links = [...(flows.sources || []), ...(flows.links || []).map((link) => ({ from: link.from, to: link.to, count: link.count, avgWaitMs: link.avgWaitMs }))];
+  if (!links.length) {
+    svg.setAttribute("viewBox", "0 0 720 80");
+    svg.innerHTML = `<text x="360" y="44" text-anchor="middle" class="sankey-empty">${esc(t("neck.none"))}</text>`;
+    return;
+  }
+  const totals = (side) => {
+    const map = new Map();
+    for (const link of links) map.set(link[side], (map.get(link[side]) || 0) + link.count);
+    return [...map].sort((a, b) => b[1] - a[1]);
+  };
+  // Keep the busiest ten on each side; fold the rest into "others".
+  const keep = (list) => new Set(list.slice(0, 10).map(([id]) => id));
+  const leftKeep = keep(totals("from"));
+  const rightKeep = keep(totals("to"));
+  const merged = new Map();
+  for (const link of links) {
+    const from = leftKeep.has(link.from) ? link.from : "__others__";
+    const to = rightKeep.has(link.to) ? link.to : "__others__";
+    const key = `${from}|${to}`;
+    const item = merged.get(key) || { from, to, count: 0, waits: [] };
+    item.count += link.count;
+    if (link.avgWaitMs != null) item.waits.push([link.avgWaitMs, link.count]);
+    merged.set(key, item);
+  }
+  const bands = [...merged.values()];
+  const side = (key) => {
+    const map = new Map();
+    for (const band of bands) map.set(band[key], (map.get(band[key]) || 0) + band.count);
+    return [...map].sort((a, b) => (a[0] === "__others__") - (b[0] === "__others__") || b[1] - a[1]);
+  };
+  const left = side("from");
+  const right = side("to");
+  // Draw at the real width so labels stay readable on phones.
+  const W = Math.max(380, Math.min(760, svg.parentElement.clientWidth || 720));
+  const M = W < 600 ? 100 : 150;
+  const CUT = W < 600 ? 9 : 14;
+  const BAR = 12;
+  const GAP = 10;
+  const PAD = 10;
+  const height = Math.max(220, Math.max(left.length, right.length) * 34);
+  const total = Math.max(left.reduce((n, [, v]) => n + v, 0), right.reduce((n, [, v]) => n + v, 0));
+  const scale = (height - PAD * 2 - GAP * (Math.max(left.length, right.length) - 1)) / total;
+  const place = (list, x) => {
+    const nodes = new Map();
+    let y = PAD;
+    for (const [id, value] of list) {
+      const h = Math.max(3, value * scale);
+      nodes.set(id, { id, x, y, h, value, inY: y, outY: y });
+      y += h + GAP;
+    }
+    return nodes;
+  };
+  const L = place(left, M);
+  const R = place(right, W - M - BAR);
+  const label = (id) => (id === "__others__" ? t("neck.others") : nameOf(id));
+  const color = (id) => (id === "__others__" ? "var(--ext)" : id === "you" || id === "automation" ? "var(--ink-2)" : colorVar(id));
+  bands.sort((a, b) => L.get(a.from).y - L.get(b.from).y || R.get(a.to).y - R.get(b.to).y);
+  let paths = "";
+  for (const band of bands) {
+    const a = L.get(band.from);
+    const b = R.get(band.to);
+    const h = Math.max(1, band.count * scale);
+    const y0 = a.outY;
+    a.outY += h;
+    const y1 = b.inY;
+    b.inY += h;
+    const x0 = a.x + BAR;
+    const x1 = b.x;
+    const xm = (x0 + x1) / 2;
+    const weighted = band.waits.length ? band.waits.reduce((n, [w, c]) => n + w * c, 0) / band.waits.reduce((n, [, c]) => n + c, 0) : null;
+    const tip = `${label(band.from)} → ${label(band.to)} · ×${band.count}${weighted != null ? ` · ${t("neck.avgShort")} ${span(weighted)}` : ""}`;
+    paths += `<path class="band" style="fill:${color(band.from)}" d="M${x0} ${y0}C${xm} ${y0} ${xm} ${y1} ${x1} ${y1}L${x1} ${y1 + h}C${xm} ${y1 + h} ${xm} ${y0 + h} ${x0} ${y0 + h}Z" data-tip="${esc(tip)}"><title>${esc(tip)}</title></path>`;
+  }
+  const nodes = (map, anchor) => [...map.values()].map((node) => `<g class="node"><rect x="${node.x}" y="${node.y}" width="${BAR}" height="${node.h}" rx="3" style="fill:${color(node.id)}"/>
+    <text x="${anchor === "end" ? node.x - 8 : node.x + BAR + 8}" y="${node.y + node.h / 2 + 4}" text-anchor="${anchor}">${esc(cut(label(node.id), CUT))} <tspan class="v">${node.value}</tspan></text></g>`).join("");
+  svg.setAttribute("viewBox", `0 0 ${W} ${height}`);
+  svg.innerHTML = `${paths}${nodes(L, "end")}${nodes(R, "start")}`;
+  svg.parentElement.dataset.left = t("neck.senders");
+  svg.parentElement.dataset.right = t("neck.receivers");
+}
+
+// ---------------------------------------------------------------- alerts bell
+
+const ALERT_ICONS = { error: "⚠️", awaiting: "💬", stuck: "⏳", done: "✅", test: "🔔" };
+const SEEN_KEY = "bot-office.alerts-seen";
+function alertsSeenAt() {
+  try { return Number(localStorage.getItem(SEEN_KEY)) || 0; } catch { return 0; }
+}
+function renderBell() {
+  const data = S.alerts || { enabled: false, alerts: [] };
+  const unseen = data.alerts.filter((alert) => alert.at > alertsSeenAt()).length;
+  $("#bell-dot").hidden = !unseen;
+  const panel = $("#bell-panel");
+  if (panel.hidden) return;
+  const rows = data.alerts.slice(0, 12).map((alert) => `<li class="${alert.at > alertsSeenAt() ? "new" : ""}">
+      <span class="icon">${ALERT_ICONS[alert.kind] || "🔔"}</span>
+      <div><b>${esc(alert.title)}</b>${alert.body ? `<span>${esc(alert.body)}</span>` : ""}<time>${ago(alert.at)}${alert.quiet ? ` · ${t("alerts.quietTag")}` : ""}</time></div>
+      ${alert.flowId ? `<button type="button" class="small-btn" data-replay="${esc(alert.flowId)}">${t("pairs.watch")} ▶</button>` : ""}
+    </li>`).join("");
+  panel.innerHTML = `<header><b>${t("alerts.title")}</b><a href="settings.html#alerts">${t(data.enabled ? "alerts.manage" : "alerts.turnOn")}</a></header>
+    ${STATIC ? `<p class="muted">${t("alerts.static")}</p>` : !data.enabled ? `<p class="muted">${t("alerts.off")}</p>` : ""}
+    ${rows ? `<ul>${rows}</ul>` : data.enabled ? `<p class="muted">${t("alerts.none")}</p>` : ""}`;
 }

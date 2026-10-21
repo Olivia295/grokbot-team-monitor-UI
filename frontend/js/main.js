@@ -2,16 +2,18 @@
 
 async function refreshOffice() {
   try {
-    S.office = await getJson("/api/office");
+    S.office = await getJson(`api/office?lang=${S.lang}`);
     const pill = $("#connection");
     const source = S.office.source;
     pill.dataset.status = source.demo ? "demo" : S.office.appOnline ? "ok" : "offline";
-    pill.textContent = source.demo ? t("pill.demo") : S.office.appOnline ? t("pill.online") : t("pill.offline");
+    pill.textContent = STATIC ? t("pill.static") : source.demo ? t("pill.demo") : S.office.appOnline ? t("pill.online") : t("pill.offline");
     const banner = $("#banner");
     banner.hidden = !source.demo && !S.office.privacy;
-    banner.innerHTML = source.demo
-      ? `${esc(t(S.settings.dataSource === "demo" ? "banner.demo" : "banner.demoAuto"))} <a href="/settings#data">${t("banner.settings")}</a>`
-      : S.office.privacy ? `${esc(t("banner.privacy"))} <a href="/settings">${t("banner.settings")}</a>` : "";
+    banner.innerHTML = STATIC
+      ? `${esc(t("banner.static"))} <a href="${esc(STATIC.repo)}" target="_blank" rel="noopener">${t("banner.repo")}</a>`
+      : source.demo
+      ? `${esc(t(S.settings.dataSource === "demo" ? "banner.demo" : "banner.demoAuto"))} <a href="settings.html#data">${t("banner.settings")}</a>`
+      : S.office.privacy ? `${esc(t("banner.privacy"))} <a href="settings.html">${t("banner.settings")}</a>` : "";
     renderStage();
     renderHero();
     renderRoster();
@@ -25,7 +27,7 @@ async function refreshOffice() {
 async function refreshFlows() {
   try {
     const hours = S.hours;
-    const data = await getJson(`/api/flows?hours=${hours}`);
+    const data = await getJson(`api/flows?hours=${hours}&lang=${S.lang}`);
     if (hours !== S.hours) return;
     const fresh = newSteps(data);
     S.flows = data;
@@ -34,6 +36,8 @@ async function refreshFlows() {
     renderFlowList();
     renderPairs();
     renderAttention();
+    renderBottleneck();
+    renderTV();
     for (const { step } of fresh) showToast(step);
     if (fresh.length) queueLive(fresh.map((item) => item.step), fresh[0].flow);
   } catch {
@@ -43,7 +47,7 @@ async function refreshFlows() {
 async function refreshInsights() {
   try {
     const first = !S.insights;
-    S.insights = await getJson("/api/insights");
+    S.insights = await getJson(`api/insights?lang=${S.lang}`);
     renderHero();
     renderAwards();
     renderFeed();
@@ -51,9 +55,22 @@ async function refreshInsights() {
     renderDigest();
     renderRhythm();
     renderAutomations();
+    renderTV();
     if (first) rotateHeadline();
   } catch {
     // Same as above.
+  }
+}
+let alertsSince = 0;
+async function refreshAlerts() {
+  try {
+    S.alerts = await getJson("api/alerts");
+    const fresh = S.alerts.alerts.filter((alert) => alert.at > alertsSince);
+    if (alertsSince) fresh.slice(0, 3).reverse().forEach(showAlertToast);
+    alertsSince = Math.max(alertsSince || Date.now() - 1000, ...S.alerts.alerts.map((alert) => alert.at));
+    renderBell();
+  } catch {
+    // An older server without /api/alerts: leave the bell quiet.
   }
 }
 function renderAll() {
@@ -68,6 +85,9 @@ function renderAll() {
   renderDigest();
   renderRhythm();
   renderAutomations();
+  renderBottleneck();
+  renderBell();
+  renderTV();
   if (S.replay) {
     showFlowDetail(S.replay.flow);
     paintReplay();
@@ -77,8 +97,15 @@ function renderAll() {
 // Handoffs that appear after the page opened become toasts and play live on the stage.
 const seenSteps = new Set();
 let seeded = false;
+let staticLoop = -1;
 function newSteps(data) {
   const fresh = [];
+  // The online demo loops its recording; start over quietly when it wraps around.
+  if (STATIC && staticClock().loopIndex !== staticLoop) {
+    staticLoop = staticClock().loopIndex;
+    seenSteps.clear();
+    seeded = false;
+  }
   for (const flow of data.flows) {
     for (const step of flow.steps) {
       const key = `${step.from}|${step.to}|${step.at}|${step.kind}`;
@@ -129,6 +156,100 @@ $("#digest-copy").addEventListener("click", async (event) => {
   }
   setTimeout(() => (button.textContent = t("digest.copy")), 1800);
 });
+// Search & filters
+let searchTimer;
+$("#flow-q").addEventListener("input", (event) => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    S.query = event.target.value;
+    renderFlowList();
+  }, 120);
+});
+$("#flow-bot").addEventListener("change", (event) => {
+  S.botFilter = event.target.value;
+  renderFlowList();
+});
+function clearSearch() {
+  S.query = "";
+  S.botFilter = "";
+  S.pairFilter = "";
+  $("#flow-q").value = "";
+  renderFlowList();
+}
+function showFlowsPane() {
+  if (S.replay) stopReplay();
+  $('[data-side="flows"]').click();
+}
+document.addEventListener("click", (event) => {
+  if (event.target.closest("[data-clear-search]")) clearSearch();
+  const pair = event.target.closest("[data-pair-filter]");
+  if (pair) {
+    S.pairFilter = pair.dataset.pairFilter;
+    showFlowsPane();
+    renderFlowList();
+    $(".side").scrollIntoView({ behavior: REDUCED ? "auto" : "smooth", block: "start" });
+  }
+});
+
+// Alerts bell
+$("#bell").addEventListener("click", (event) => {
+  event.stopPropagation();
+  const panel = $("#bell-panel");
+  panel.hidden = !panel.hidden;
+  $("#bell").setAttribute("aria-expanded", String(!panel.hidden));
+  renderBell();
+  if (!panel.hidden) {
+    try { localStorage.setItem(SEEN_KEY, String(Date.now())); } catch { /* ignore */ }
+    setTimeout(() => ($("#bell-dot").hidden = true), 600);
+  }
+});
+document.addEventListener("click", (event) => {
+  const panel = $("#bell-panel");
+  if (!panel.hidden && !event.target.closest(".bell-wrap")) {
+    panel.hidden = true;
+    $("#bell").setAttribute("aria-expanded", "false");
+  }
+});
+
+// Export & share
+$("#week-md").addEventListener("click", exportWeekMarkdown);
+$("#week-png").addEventListener("click", exportWeekPNG);
+$("#replay-gif").addEventListener("click", () => S.replay && exportRelayGIF(S.replay.flow));
+$("#replay-link").addEventListener("click", async (event) => {
+  if (!S.replay) return;
+  const button = event.currentTarget;
+  const url = `${location.origin}${location.pathname}#flow=${S.replay.flow.id}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    showToastText(t("replay.linkCopied"));
+  } catch {
+    showToastText(url);
+  }
+  button.blur();
+});
+$("#export-close").addEventListener("click", () => $("#export-dialog").close());
+$("#export-dialog").addEventListener("click", (event) => { if (event.target === event.currentTarget) event.currentTarget.close(); });
+
+// Deep links: #flow=<id> opens that relay's replay.
+async function openFlowFromHash() {
+  const match = location.hash.match(/^#flow=([\w-]+)$/);
+  if (!match || !S.flows) return;
+  let flow = S.flows.flows.find((item) => item.id === match[1]);
+  for (const hours of [168, 720]) {
+    if (flow || S.hours >= hours) break;
+    pressHours(hours);
+    await refreshFlows();
+    flow = S.flows.flows.find((item) => item.id === match[1]);
+  }
+  if (flow) {
+    startReplay(flow);
+    $(".stage").scrollIntoView({ block: "start" });
+  } else {
+    showToastText(t("replay.notFound"));
+  }
+}
+addEventListener("hashchange", openFlowFromHash);
+
 $("#ambient").addEventListener("change", (event) => {
   S.ambient = event.target.checked;
   if (!S.ambient) stopAmbient();
@@ -217,7 +338,10 @@ $("#lang").addEventListener("click", async () => {
 let resizeTimer;
 addEventListener("resize", () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => S.view === "track" && renderTrack(), 150);
+  resizeTimer = setTimeout(() => {
+    if (S.view === "track") renderTrack();
+    renderBottleneck();
+  }, 150);
 });
 
 (async function boot() {
@@ -229,11 +353,19 @@ addEventListener("resize", () => {
   $("#ambient").checked = S.ambient;
   idleNarration();
   requestAnimationFrame(frame);
+  if (STATIC) {
+    document.body.classList.add("static-demo");
+    $("#tv-link").href = "?tv=1";
+  }
   await refreshOffice();
-  await Promise.all([refreshFlows(), refreshInsights()]);
+  await Promise.all([refreshFlows(), refreshInsights(), refreshAlerts()]);
+  initTV();
+  renderTV();
+  openFlowFromHash();
   const every = Math.max(2, S.settings.refreshSeconds) * 1000;
   setInterval(refreshOffice, every);
   setInterval(refreshFlows, Math.max(every * 2, 8000));
   setInterval(refreshInsights, 15000);
+  setInterval(refreshAlerts, Math.max(every, 5000));
   setInterval(rotateHeadline, 6000);
 })();

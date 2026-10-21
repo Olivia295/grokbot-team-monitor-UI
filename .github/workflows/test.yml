@@ -13,6 +13,8 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -B -m unittest discover -s tests -v
+      - run: python scripts/build_pages.py
+      - run: python -m pip wheel . --no-deps -w dist
       - uses: actions/setup-node@v4
         with:
           node-version: 20

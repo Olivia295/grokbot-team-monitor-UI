@@ -46,14 +46,14 @@ for (const control of $$("[data-setting]")) {
     if (control.hasAttribute("data-number")) value = Number(value);
     await save({ [key]: value });
     if (key === "language") render();
-    if (key === "dataSource" || key === "supportDir" || key === "language") await loadOffice();
+    if (["dataSource", "supportDir", "eventsPath", "language"].includes(key)) await loadOffice();
   });
 }
 
 let office = null;
 async function loadOffice() {
   try {
-    office = await getJson("/api/office");
+    office = await getJson(`api/office?lang=${S.lang}`);
     S.office = office;
   } catch {
     office = null;
@@ -65,16 +65,141 @@ async function loadOffice() {
 }
 function renderSource() {
   const node = $("#source-status");
+  const meta = S.settings._meta || {};
+  $("#ingest-example").textContent = `curl -X POST ${location.origin}/api/events -H 'Content-Type: application/json' \\\n  -d '{"type":"handoff","from":"planner","to":"coder","text":"Fix the login bug"}'`;
+  if (meta.file && $("#settings-file")) $("#settings-file").textContent = meta.file;
   if (!office) {
     node.textContent = t("pill.error");
     return;
   }
   const source = office.source;
-  $("#supportDir").placeholder = source.supportDir || t("set.folderAuto");
+  if (source.kind !== "events") $("#supportDir").placeholder = source.supportDir || t("set.folderAuto");
   node.innerHTML = source.demo
-    ? `🧪 ${esc(t("set.statusDemo"))}`
-    : `✅ ${esc(t("set.statusGrok", { n: office.roster.length, path: source.supportDir }))}`;
+    ? `🧪 ${esc(t(STATIC ? "set.statusStatic" : "set.statusDemo"))}`
+    : source.kind === "events"
+      ? `🔌 ${esc(t("set.statusEvents", { n: office.roster.length, path: source.supportDir }))}`
+      : `✅ ${esc(t("set.statusGrok", { n: office.roster.length, path: source.supportDir }))}`;
 }
+
+// ---------------------------------------------------------------- alerts
+
+const HOOK_KINDS = ["slack", "discord", "feishu", "dingtalk", "generic"];
+function alertsConfig() {
+  return { ...structuredClone(DEFAULT_SETTINGS.alerts), ...(S.settings.alerts || {}) };
+}
+function fillAlerts() {
+  const config = alertsConfig();
+  const hours = Array.from({ length: 24 }, (_, h) => `<option value="${h}">${String(h).padStart(2, "0")}:00</option>`).join("");
+  if (!$("#quietFrom").options.length) {
+    $("#quietFrom").innerHTML = hours;
+    $("#quietTo").innerHTML = hours;
+  }
+  for (const control of $$("[data-alert]")) {
+    const value = config[control.dataset.alert];
+    if (control.type === "checkbox") control.checked = Boolean(value);
+    else control.value = String(value);
+  }
+  $(".alert-body").disabled = !config.enabled;
+  renderHooks();
+}
+async function saveAlerts(change) {
+  await save({ alerts: { ...alertsConfig(), ...change } });
+  fillAlerts();
+}
+for (const control of $$("[data-alert]")) {
+  control.addEventListener("change", () => {
+    let value = control.type === "checkbox" ? control.checked : control.value;
+    if (control.hasAttribute("data-number")) value = Number(value);
+    saveAlerts({ [control.dataset.alert]: value });
+  });
+}
+function renderHooks() {
+  const hooks = alertsConfig().webhooks;
+  $("#hook-list").innerHTML = hooks.map((hook, i) => `<li data-hook="${i}">
+      <select data-hook-field="kind" aria-label="${esc(t("set.hookKind"))}">${HOOK_KINDS.map((kind) => `<option value="${kind}" ${hook.kind === kind ? "selected" : ""}>${esc(t(`hook.${kind}`))}</option>`).join("")}</select>
+      <input type="url" data-hook-field="url" value="${esc(hook.url)}" placeholder="https://…" aria-label="${esc(t("set.hookUrl"))}" spellcheck="false" autocomplete="off">
+      <input type="password" data-hook-field="secret" value="${esc(hook.secret || "")}" placeholder="${esc(t("set.hookSecret"))}" aria-label="${esc(t("set.hookSecret"))}" autocomplete="off" ${hook.kind === "feishu" || hook.kind === "dingtalk" ? "" : 'style="visibility:hidden"'}>
+      <label class="switch small"><input type="checkbox" data-hook-field="enabled" ${hook.enabled !== false ? "checked" : ""}><span></span></label>
+      <button type="button" class="icon-btn" data-hook-remove aria-label="${esc(t("set.hookRemove"))}">✕</button>
+    </li>`).join("") || `<li class="muted">${t("set.hookNone")}</li>`;
+}
+let draftHook = null;
+$("#hook-add").addEventListener("click", () => {
+  draftHook = { kind: "slack", url: "", enabled: true };
+  const list = $("#hook-list");
+  if (list.querySelector(".muted")) list.innerHTML = "";
+  const row = document.createElement("li");
+  row.dataset.hook = "new";
+  row.innerHTML = `<select data-hook-field="kind" aria-label="${esc(t("set.hookKind"))}">${HOOK_KINDS.map((kind) => `<option value="${kind}">${esc(t(`hook.${kind}`))}</option>`).join("")}</select>
+    <input type="url" data-hook-field="url" placeholder="https://…" aria-label="${esc(t("set.hookUrl"))}" spellcheck="false" autocomplete="off">
+    <input type="password" data-hook-field="secret" placeholder="${esc(t("set.hookSecret"))}" aria-label="${esc(t("set.hookSecret"))}" autocomplete="off" style="visibility:hidden">
+    <label class="switch small"><input type="checkbox" data-hook-field="enabled" checked><span></span></label>
+    <button type="button" class="icon-btn" data-hook-remove aria-label="${esc(t("set.hookRemove"))}">✕</button>`;
+  list.append(row);
+  row.querySelector("input[type=url]").focus();
+});
+$("#hook-list").addEventListener("change", async (event) => {
+  const row = event.target.closest("[data-hook]");
+  if (!row) return;
+  const field = event.target.dataset.hookField;
+  const value = event.target.type === "checkbox" ? event.target.checked : event.target.value.trim();
+  if (field === "kind") row.querySelector('[data-hook-field="secret"]').style.visibility = ["feishu", "dingtalk"].includes(value) ? "" : "hidden";
+  const hooks = alertsConfig().webhooks;
+  if (row.dataset.hook === "new") {
+    draftHook[field] = value;
+    if (!draftHook.url) return;
+    if (!/^https:\/\//.test(draftHook.url) && !/^http:\/\/(127\.0\.0\.1|localhost)/.test(draftHook.url)) {
+      flashSaved(false);
+      return;
+    }
+    hooks.push(draftHook);
+    draftHook = null;
+  } else {
+    hooks[Number(row.dataset.hook)] = { ...hooks[Number(row.dataset.hook)], [field]: value };
+  }
+  await saveAlerts({ webhooks: hooks });
+});
+$("#hook-list").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-hook-remove]");
+  if (!button) return;
+  const row = button.closest("[data-hook]");
+  if (row.dataset.hook === "new") {
+    draftHook = null;
+    row.remove();
+    return;
+  }
+  const hooks = alertsConfig().webhooks.filter((_, i) => i !== Number(row.dataset.hook));
+  await saveAlerts({ webhooks: hooks });
+});
+$("#alert-test").addEventListener("click", async () => {
+  const list = $("#test-results");
+  list.innerHTML = `<li class="muted">${t("set.testing")}</li>`;
+  try {
+    const { results } = await postJson("api/alerts/test", {});
+    list.innerHTML = results.length
+      ? results.map((item) => `<li class="${item.ok ? "ok" : "bad"}">${item.ok ? "✓" : "✕"} ${esc(item.channel === "desktop" ? t("set.desktop") : HOOK_KINDS.includes(item.channel) ? t(`hook.${item.channel}`) : item.channel)}${item.error ? ` — ${esc(item.error)}` : ""}</li>`).join("")
+      : `<li class="muted">${t("set.testNone")}</li>`;
+  } catch {
+    list.innerHTML = `<li class="bad">✕ ${t("pill.error")}</li>`;
+  }
+});
+
+// ---------------------------------------------------------------- big screen
+
+function renderTVLinks() {
+  const base = `${location.origin}${location.pathname.replace(/settings(\.html)?$/, "")}`;
+  $("#tv-url").textContent = `${base}?tv=1`;
+  $("#tv-open").href = "./?tv=1";
+  $("#overlay-url").textContent = `${base}?overlay=1&view=studio`;
+}
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-copy]");
+  if (!button) return;
+  try {
+    await navigator.clipboard.writeText($(`#${button.dataset.copy}`).textContent);
+    flashSaved(true);
+  } catch { /* the text is visible for manual copy */ }
+});
 
 // ---------------------------------------------------------------- rooms
 
@@ -232,6 +357,8 @@ $("#resetLook").addEventListener("click", async () => {
 
 function render() {
   fillControls();
+  fillAlerts();
+  renderTVLinks();
   renderSource();
   renderRooms();
   renderPicker();
@@ -243,7 +370,10 @@ function render() {
   $("#brand-logo").innerHTML = logoSVG(40);
   paintIcons();
   await loadSettings();
+  if (STATIC) document.body.classList.add("static-demo");
   fillControls();
+  fillAlerts();
+  renderTVLinks();
   const match = location.hash.match(/^#bot=(.+)$/);
   if (match) editing = decodeURIComponent(match[1]);
   await loadOffice();

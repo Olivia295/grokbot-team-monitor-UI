@@ -833,6 +833,7 @@ function startReplay(flow, index = 0) {
   renderStage();
   showFlowDetail(flow);
   goToStep(index, "start");
+  if (location.hash !== `#flow=${flow.id}`) history.replaceState(null, "", `#flow=${flow.id}`);
 }
 function stopReplay() {
   if (!S.replay) return;
@@ -845,6 +846,7 @@ function stopReplay() {
   endScene(0);
   renderStage();
   ambient.nextAt = performance.now() + 3000;
+  if (location.hash.startsWith("#flow=")) history.replaceState(null, "", location.pathname + location.search);
 }
 function goToStep(index, mode = "jump") {
   const replay = S.replay;

@@ -11,8 +11,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from backend.collab import _plain, _ref, _reply_text, _stamp
-from backend.grok_cache import Cache, load_cache
+from .collab import _plain, _ref, _reply_text, _stamp
+from .grok_cache import Cache, load_cache
 
 DAY_MS = 24 * 3600 * 1000
 SPARK_DAYS = 14

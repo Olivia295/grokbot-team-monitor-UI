@@ -58,8 +58,9 @@ function hashOf(text) {
 function defaultLook(agent) {
   const seed = hashOf(agent.id || agent.name || "bot");
   const look = {
-    shape: GROK_SHAPES[agent.avatarShape] || AV.shapes[seed % AV.shapes.length],
-    color: GROK_COLORS[agent.avatarColor] || AV.colorNames[(seed >>> 5) % AV.colorNames.length],
+    // Grok's own avatar names, or catalog names straight from an event log.
+    shape: GROK_SHAPES[agent.avatarShape] || (AV.shapes.includes(agent.avatarShape) ? agent.avatarShape : AV.shapes[seed % AV.shapes.length]),
+    color: GROK_COLORS[agent.avatarColor] || (AV.colors[agent.avatarColor] ? agent.avatarColor : AV.colorNames[(seed >>> 5) % AV.colorNames.length]),
     eyes: ["dot", "sparkle", "dot", "happy"][(seed >>> 9) % 4],
     mouth: AV.mouths[(seed >>> 12) % AV.mouths.length],
     hat: "none",
@@ -268,6 +269,33 @@ function planeSVG(color = "#5b9fdc") {
 function avatarSVG(agent, size = 40, kind = "agent", override) {
   const art = kind === "you" ? personSVG() : kind === "automation" ? clockSVG() : creatureSVG(agent, override);
   return `<svg class="avatar" width="${size}" height="${size}" viewBox="-44 -98 88 104" aria-hidden="true">${art}</svg>`;
+}
+
+// A self-contained SVG document (gradients and the few CSS rules it needs inlined), for drawing
+// avatars onto a canvas when exporting images and GIFs.
+function avatarDocument(agent, size = 96, kind = "agent", state = "") {
+  const defs = Object.entries(AV.colors).map(([name, [light, base]]) =>
+    `<linearGradient id="av-${name}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${light}"/><stop offset="1" stop-color="${base}"/></linearGradient>`).join("");
+  const style = ".sb,.hearts,.speech,.envelope-held,.sweat{display:none}.ground{fill:#1f2a3d1f}"
+    + ".st-syncing .envelope-held,.st-syncing .sb-syncing,.st-error .sweat,.st-error .sb-error,.st-executing .sb-executing,.st-writing .sb-writing,.st-researching .sb-researching{display:block}";
+  const art = kind === "you" ? personSVG() : kind === "automation" ? clockSVG() : creatureSVG(agent);
+  const body = (state ? art.replace('class="creature ', `class="creature st-${state} `) : art)
+    // Some parts repeat an attribute (shared stroke style plus an override). HTML keeps the first
+    // one; XML refuses the file, so drop the repeats the same way before making an image of it.
+    .replace(/<([a-zA-Z][\w:-]*)((?:\s+[\w:-]+="[^"]*")*)\s*(\/?)>/g, (match, tag, attrs, slash) => {
+      const seen = new Set();
+      const kept = [...attrs.matchAll(/\s+([\w:-]+)="[^"]*"/g)].filter(([, name]) => !seen.has(name) && seen.add(name)).map(([whole]) => whole);
+      return `<${tag}${kept.join("")}${slash ? "/" : ""}>`;
+    });
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="-44 -98 88 104"><defs>${defs}</defs><style>${style}</style>${body}</svg>`;
+}
+function avatarImage(agent, size = 96, kind = "agent", state = "") {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(avatarDocument(agent, size, kind, state))}`;
+  });
 }
 
 // Show a short line in a creature's speech bubble (empty text hides it).

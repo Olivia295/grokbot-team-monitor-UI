@@ -67,6 +67,8 @@ class Cache:
     pinned: list[str] = field(default_factory=list)
     usage: dict = field(default_factory=dict)
     demo: bool = False
+    source: str = "grok"  # grok | demo | events
+    online: bool | None = None  # None: ask the Grok Bot desktop app
     transcripts: dict[str, tuple[list[dict], int]] = field(default_factory=dict)
 
     def transcript(self, agent_id: str) -> tuple[list[dict], int]:

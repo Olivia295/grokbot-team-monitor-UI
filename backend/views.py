@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import os
 import time
+from pathlib import Path
 
-from backend.collab import flows_from, office_from
-from backend.demo import demo_cache
-from backend.grok_cache import Cache, default_support_dir, load_cache
-from backend.insights import insights_from
-from backend.settings import load_settings
+from .collab import flows_from, office_from
+from .demo import demo_cache
+from .events import event_files, events_cache
+from .grok_cache import Cache, default_support_dir, load_cache
+from .insights import insights_from
+from .settings import data_dir, load_settings
 
 MASK = "•••"
 
@@ -23,19 +25,49 @@ def _now() -> int:
     return int(time.time() * 1000)
 
 
+def events_path(settings: dict) -> Path | None:
+    """The JSONL event file or folder in use: --events / GROK_COLLAB_EVENTS, then settings."""
+    value = os.environ.get("GROK_COLLAB_EVENTS", "").strip() or settings.get("eventsPath", "").strip()
+    return Path(value).expanduser() if value else None
+
+
+def ingest_path(settings: dict) -> Path:
+    """Where POST /api/events appends: the configured .jsonl file, else data/events.jsonl."""
+    path = events_path(settings)
+    if path is not None and (path.suffix == ".jsonl" or path.is_file()):
+        return path
+    if path is not None and path.is_dir():
+        return path / "events.jsonl"
+    return data_dir() / "events.jsonl"
+
+
 def resolve_cache(settings: dict, now_ms: int) -> Cache:
-    source = "demo" if os.environ.get("GROK_COLLAB_DEMO") == "1" else settings.get("dataSource", "auto")
+    if os.environ.get("GROK_COLLAB_DEMO") == "1":
+        source = "demo"
+    elif os.environ.get("GROK_COLLAB_EVENTS", "").strip():
+        source = "events"
+    else:
+        source = settings.get("dataSource", "auto")
     language = "en" if settings.get("language") == "en" else "zh"
     if source == "demo":
         return demo_cache(now_ms, language)
+    if source == "events":
+        return events_cache(events_path(settings) or ingest_path(settings), now_ms)
     cache = load_cache(default_support_dir(settings.get("supportDir", "")))
     if source == "auto" and not cache.roster:
+        # No Grok Bot here: try an event log (configured, or what POST /api/events wrote), then the demo.
+        for path in (events_path(settings), ingest_path(settings)):
+            if path is not None and event_files(path):
+                events = events_cache(path, now_ms)
+                if events.roster:
+                    return events
         return demo_cache(now_ms, language)
     return cache
 
 
 def _source(cache: Cache) -> dict:
-    return {"demo": cache.demo, "supportDir": "" if cache.demo else str(cache.support), "found": bool(cache.roster)}
+    return {"demo": cache.demo, "kind": cache.source, "supportDir": "" if cache.demo else str(cache.support),
+            "found": bool(cache.roster)}
 
 
 def _bot(settings: dict, bot_id: str) -> dict:
@@ -118,6 +150,13 @@ def insights_view(settings: dict | None = None, now_ms: int | None = None) -> di
         if settings.get("privacy") and profile["description"]:
             profile["description"] = MASK
     data["awards"] = [award for award in data["awards"] if award["id"] not in hidden]
+    # Last seven days of collaboration, for the weekly report export.
+    week = flows_from(cache, now_ms, 168)
+    data["week"] = {
+        "flows": week["flowCount"], "handoffs": week["handoffCount"], "solo": week["soloCount"],
+        "hub": week["hub"], "bottleneck": week["bottleneck"],
+        "topLinks": [{key: link[key] for key in ("from", "to", "count", "avgWaitMs")} for link in week["links"][:5]],
+    }
     if settings.get("privacy"):
         for item in data["feed"]:
             if item["kind"] != "automation" and item.get("text"):

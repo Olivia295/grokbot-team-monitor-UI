@@ -4,18 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Settings · Bot Office</title>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/css/app.css">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
 </head>
 <body class="settings-page">
   <header class="top">
-    <a class="brand" href="/">
+    <a class="brand" href="./">
       <span class="brand-logo" id="brand-logo"></span>
       <div><h1 data-i18n="settings.title"></h1><p data-i18n="settings.tagline"></p></div>
     </a>
     <div class="top-tools">
       <span class="saved" id="saved" role="status" aria-live="polite"></span>
-      <a class="primary-btn" href="/" data-i18n="settings.back"></a>
+      <a class="primary-btn" href="./" data-i18n="settings.back"></a>
     </div>
   </header>
 
@@ -23,7 +23,9 @@
     <nav class="settings-nav card" data-i18n-aria="settings.title">
       <a href="#general" data-i18n="set.general"></a>
       <a href="#privacy" data-i18n="set.privacy"></a>
-      <a href="#data" data-i18n="set.data"></a>
+      <a href="#data" class="local-only" data-i18n="set.data"></a>
+      <a href="#alerts" class="local-only" data-i18n="set.alerts"></a>
+      <a href="#tv" data-i18n="set.tv"></a>
       <a href="#rooms" data-i18n="set.rooms"></a>
       <a href="#bots" data-i18n="set.bots"></a>
       <a href="#about" data-i18n="set.about"></a>
@@ -54,14 +56,62 @@
         <p class="hint" data-i18n="set.localOnly"></p>
       </section>
 
-      <section class="card set-section" id="data">
+      <section class="card set-section local-only" id="data">
         <h2 data-i18n="set.data"></h2>
         <div class="field"><label for="sourceSel" data-i18n="set.source"></label>
-          <select id="sourceSel" data-setting="dataSource"><option value="auto" data-i18n="opt.sourceAuto"></option><option value="grok" data-i18n="opt.sourceGrok"></option><option value="demo" data-i18n="opt.sourceDemo"></option></select></div>
+          <select id="sourceSel" data-setting="dataSource"><option value="auto" data-i18n="opt.sourceAuto"></option><option value="grok" data-i18n="opt.sourceGrok"></option><option value="events" data-i18n="opt.sourceEvents"></option><option value="demo" data-i18n="opt.sourceDemo"></option></select></div>
         <div class="field"><label for="supportDir" data-i18n="set.folder"></label>
           <input id="supportDir" data-setting="supportDir" type="text" spellcheck="false" autocomplete="off">
           <p class="hint" data-i18n="set.folderHint"></p></div>
+        <div class="field"><label for="eventsPath" data-i18n="set.events"></label>
+          <input id="eventsPath" data-setting="eventsPath" type="text" spellcheck="false" autocomplete="off" placeholder="~/agents/runs.jsonl">
+          <p class="hint" data-i18n="set.eventsHint"></p>
+          <pre class="code" id="ingest-example"></pre></div>
         <p class="status-line" id="source-status"></p>
+      </section>
+
+      <section class="card set-section local-only" id="alerts">
+        <h2 data-i18n="set.alerts"></h2>
+        <div class="field row"><label class="switch"><input type="checkbox" data-alert="enabled"><span></span><b data-i18n="set.alertsOn"></b></label>
+          <p class="hint" data-i18n="set.alertsHint"></p></div>
+        <fieldset class="alert-body">
+          <legend class="sub" data-i18n="set.alertWhen"></legend>
+          <div class="checks">
+            <label><input type="checkbox" data-alert="error"> <span data-i18n="set.alertError"></span></label>
+            <label><input type="checkbox" data-alert="awaiting"> <span data-i18n="set.alertAwaiting"></span></label>
+            <label><input type="checkbox" data-alert="stuck"> <span data-i18n="set.alertStuck"></span>
+              <select data-alert="stuckMinutes" data-number data-i18n-aria="set.stuckMinutes"><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">60 min</option></select></label>
+            <label><input type="checkbox" data-alert="done"> <span data-i18n="set.alertDone"></span></label>
+          </div>
+          <div class="field-grid">
+            <div class="field"><label for="cooldownSel" data-i18n="set.cooldown"></label>
+              <select id="cooldownSel" data-alert="cooldownMinutes" data-number><option value="5">5 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">60 min</option><option value="240">4 h</option></select></div>
+            <div class="field"><span class="label" data-i18n="set.quiet"></span>
+              <div class="inline"><label class="switch small"><input type="checkbox" data-alert="quiet"><span></span></label>
+                <select data-alert="quietFrom" data-number id="quietFrom" data-i18n-aria="set.quietFrom"></select> – <select data-alert="quietTo" data-number id="quietTo" data-i18n-aria="set.quietTo"></select></div></div>
+          </div>
+          <legend class="sub" data-i18n="set.channels"></legend>
+          <div class="field row"><label class="switch"><input type="checkbox" data-alert="desktop"><span></span><b data-i18n="set.desktop"></b></label></div>
+          <ol class="hook-list" id="hook-list"></ol>
+          <div class="btn-row">
+            <button type="button" class="small-btn" id="hook-add">＋ <span data-i18n="set.hookAdd"></span></button>
+            <button type="button" class="small-btn" id="alert-test"><i data-icon="bell"></i> <span data-i18n="set.alertTest"></span></button>
+          </div>
+          <ul class="test-results" id="test-results" aria-live="polite"></ul>
+          <p class="hint" data-i18n="set.hookHint"></p>
+        </fieldset>
+      </section>
+
+      <section class="card set-section" id="tv">
+        <h2 data-i18n="set.tv"></h2>
+        <p class="hint" data-i18n="set.tvHint"></p>
+        <div class="field"><label for="tvSel" data-i18n="set.tvSeconds"></label>
+          <select id="tvSel" data-setting="tvSeconds" data-number><option value="10">10s</option><option value="20">20s</option><option value="30">30s</option><option value="60">60s</option><option value="120">2 min</option></select></div>
+        <div class="link-rows">
+          <div><span data-i18n="set.tvLink"></span><code id="tv-url"></code><button type="button" class="small-btn" data-copy="tv-url"><i data-icon="copy"></i></button><a class="small-btn" id="tv-open" target="_blank" rel="noopener" data-i18n="set.open"></a></div>
+          <div><span data-i18n="set.overlayLink"></span><code id="overlay-url"></code><button type="button" class="small-btn" data-copy="overlay-url"><i data-icon="copy"></i></button></div>
+        </div>
+        <p class="hint" data-i18n="set.overlayHint"></p>
       </section>
 
       <section class="card set-section" id="rooms">
@@ -102,16 +152,17 @@
         <h2 data-i18n="set.about"></h2>
         <p data-i18n="about.what"></p>
         <p class="hint" data-i18n="about.data"></p>
-        <p class="hint"><span data-i18n="about.file"></span> <code>data/settings.json</code></p>
+        <p class="hint local-only"><span data-i18n="about.file"></span> <code id="settings-file">data/settings.json</code></p>
+        <p class="hint static-only" data-i18n="about.static"></p>
         <p class="hint" data-i18n="about.license"></p>
       </section>
     </div>
   </main>
 
   <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
-  <script src="/js/i18n.js"></script>
-  <script src="/js/avatars.js"></script>
-  <script src="/js/common.js"></script>
-  <script src="/js/settings.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/avatars.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/settings.js"></script>
 </body>
 </html>

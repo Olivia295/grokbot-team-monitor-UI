@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "grokbot-teamwork-ui"
+version = "0.4.0"
+description = "Bot Office (Bot协作室): watch your Grok Bot team, or any multi-agent system, hand off work in a living office. Local, read-only, zero dependencies."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Olivia295" }]
+keywords = ["grok", "agents", "multi-agent", "dashboard", "visualization", "observability"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Environment :: Web Environment",
+  "Topic :: Scientific/Engineering :: Visualization",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Olivia295/grokbot-teamwork-UI"
+Demo = "https://olivia295.github.io/grokbot-teamwork-UI/"
+Issues = "https://github.com/Olivia295/grokbot-teamwork-UI/issues"
+
+[project.scripts]
+bot-office = "grokbot_teamwork_ui.backend.server:main"
+grokbot-teamwork-ui = "grokbot_teamwork_ui.backend.server:main"
+
+# The repository root is the package, so a checkout and an install share one layout:
+# grokbot_teamwork_ui/{backend,frontend,integrations}.
+[tool.setuptools]
+package-dir = { "grokbot_teamwork_ui" = "." }
+packages = ["grokbot_teamwork_ui", "grokbot_teamwork_ui.backend", "grokbot_teamwork_ui.integrations"]
+include-package-data = false
+
+[tool.setuptools.package-data]
+grokbot_teamwork_ui = ["frontend/*.html", "frontend/*.svg", "frontend/css/*.css", "frontend/js/*.js"]

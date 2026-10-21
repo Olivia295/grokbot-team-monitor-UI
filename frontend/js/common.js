@@ -28,27 +28,134 @@ function cut(text, n) {
 
 // ---------------------------------------------------------------- settings
 
+const DEFAULT_SETTINGS = {
+  language: "auto", theme: "auto", hours: 24, ambient: true, motion: "full", privacy: false, refreshSeconds: 3,
+  dataSource: "auto", supportDir: "", eventsPath: "", tvSeconds: 20, rooms: {}, bots: {},
+  alerts: { enabled: false, desktop: true, error: true, awaiting: true, stuck: true, done: false, stuckMinutes: 10, cooldownMinutes: 15, quiet: false, quietFrom: 23, quietTo: 8, webhooks: [] },
+};
 async function getJson(url) {
+  if (STATIC) return staticJson(url);
   const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw new Error(String(response.status));
+  return response.json();
+}
+async function postJson(url, body) {
+  const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!response.ok) throw new Error(String(response.status));
   return response.json();
 }
 async function loadSettings() {
   try {
-    S.settings = await getJson("/api/settings");
+    S.settings = { ...structuredClone(DEFAULT_SETTINGS), ...(await getJson("api/settings")) };
   } catch {
-    S.settings = { language: "auto", theme: "auto", hours: 24, ambient: true, motion: "full", privacy: false, refreshSeconds: 3, dataSource: "auto", supportDir: "", rooms: {}, bots: {} };
+    S.settings = structuredClone(DEFAULT_SETTINGS);
   }
   applySettings();
   return S.settings;
 }
 async function saveSettings(patch) {
   const next = { ...S.settings, ...patch };
-  const response = await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) });
-  if (!response.ok) throw new Error(String(response.status));
-  S.settings = await response.json();
+  if (STATIC) {
+    S.settings = next;
+    try { localStorage.setItem(STATIC_KEY, JSON.stringify(next)); } catch { /* private window: keep it for this visit */ }
+  } else {
+    S.settings = await postJson("api/settings", next);
+  }
   applySettings();
   return S.settings;
+}
+
+// ---------------------------------------------------------------- static site (GitHub Pages demo)
+// The online demo has no server: scripts/build_pages.py bakes the demo team into JSON frames,
+// 30 seconds apart. The page plays them in a loop and moves every timestamp up to the present,
+// and applies settings (aliases, looks, rooms, privacy) here instead of on the server.
+
+const STATIC = window.BOT_OFFICE_STATIC || null;
+const STATIC_KEY = "bot-office.settings";
+const staticFiles = new Map();
+async function staticFile(path) {
+  if (!staticFiles.has(path)) {
+    staticFiles.set(path, fetch(`${STATIC.base}${path}`).then((response) => {
+      if (!response.ok) throw new Error(String(response.status));
+      return response.json();
+    }));
+    if (staticFiles.size > 40) staticFiles.delete(staticFiles.keys().next().value);
+  }
+  return structuredClone(await staticFiles.get(path));
+}
+function staticClock() {
+  const elapsed = Math.max(0, Date.now() - STATIC.t0);
+  const loop = STATIC.step * STATIC.frames;
+  const loopIndex = Math.floor(elapsed / loop);
+  return { loopIndex, shift: loopIndex * loop, frame: Math.min(STATIC.frames - 1, Math.floor((elapsed % loop) / STATIC.step)) };
+}
+function shiftTimes(value, shift, lo, hi) {
+  if (Array.isArray(value)) return value.map((item) => shiftTimes(item, shift, lo, hi));
+  if (value && typeof value === "object") {
+    for (const key of Object.keys(value)) value[key] = shiftTimes(value[key], shift, lo, hi);
+    return value;
+  }
+  return typeof value === "number" && value >= lo && value <= hi ? value + shift : value;
+}
+async function staticJson(url) {
+  const [path, query = ""] = url.replace(/^\//, "").split("?");
+  if (path === "api/settings") {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(STATIC_KEY) || "{}"); } catch { /* ignore */ }
+    return { ...structuredClone(DEFAULT_SETTINGS), dataSource: "demo", ...saved };
+  }
+  if (path === "api/alerts") return { enabled: false, alerts: [] };
+  const lang = S.lang === "en" ? "en" : "zh";
+  const { shift, frame } = staticClock();
+  let data;
+  if (path === "api/office" || (path === "api/flows" && (new URLSearchParams(query).get("hours") || "24") === "24")) {
+    const both = await staticFile(`${lang}/frame-${String(frame).padStart(3, "0")}.json`);
+    data = path === "api/office" ? both.office : both.flows;
+  } else if (path === "api/flows") {
+    data = await staticFile(`${lang}/flows-${new URLSearchParams(query).get("hours") === "720" ? 720 : 168}.json`);
+  } else if (path === "api/insights") {
+    data = await staticFile(`${lang}/insights.json`);
+  } else {
+    throw new Error("404");
+  }
+  const day = 86400e3;
+  shiftTimes(data, shift, STATIC.t0 - 90 * day, STATIC.t0 + STATIC.step * STATIC.frames + 10 * day);
+  return staticView(path, data);
+}
+// The same adjustments backend/views.py makes, for the static demo.
+function staticView(path, data) {
+  const settings = S.settings || DEFAULT_SETTINGS;
+  const bots = settings.bots || {};
+  const rooms = settings.rooms || {};
+  const MASK = "•••";
+  const alias = (id, name) => bots[id]?.alias || name;
+  if (path === "api/office") {
+    const hiddenRooms = new Set(Object.keys(rooms).filter((id) => rooms[id].hidden));
+    data.wings = data.wings.filter((wing) => !hiddenRooms.has(wing.id))
+      .map((wing, index) => ({ ...wing, name: rooms[wing.id]?.name || wing.name, order: rooms[wing.id]?.order ?? index }))
+      .sort((a, b) => a.order - b.order);
+    data.agents = data.agents.filter((agent) => !bots[agent.id]?.hidden && !hiddenRooms.has(agent.wingId)).map((agent) => {
+      const wing = data.wings.find((item) => item.id === agent.wingId);
+      const next = { ...agent, name: alias(agent.id, agent.originalName || agent.name), look: bots[agent.id]?.look || {}, wingName: wing ? wing.name : agent.wingName };
+      if (settings.privacy) Object.assign(next, { snippet: agent.snippet && MASK, roleLine: agent.roleLine && MASK, detailParam: agent.detailParam && MASK });
+      return next;
+    });
+    data.privacy = Boolean(settings.privacy);
+  } else if (path === "api/flows") {
+    for (const item of data.external) item.name = alias(item.id, item.name);
+    if (settings.privacy) for (const flow of data.flows) {
+      if (flow.trigger.text) flow.trigger.text = MASK;
+      for (const step of flow.steps) step.text = step.text && MASK;
+    }
+  } else if (path === "api/insights") {
+    for (const profile of data.profiles) {
+      profile.name = alias(profile.id, profile.name);
+      if (settings.privacy && profile.description) profile.description = MASK;
+    }
+    data.awards = data.awards.filter((award) => !bots[award.id]?.hidden);
+    if (settings.privacy) for (const item of data.feed) if (item.kind !== "automation" && item.text) item.text = MASK;
+  }
+  return data;
 }
 function applySettings() {
   const settings = S.settings;
@@ -280,6 +387,16 @@ const ICONS = {
   copy: '<rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
   palette: '<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.9 1.2-1.8-.5-1.1.2-2.2 1.4-2.2H17a4 4 0 0 0 4-4c0-5-4-10-9-10z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/>',
   arrowLeft: '<path d="M15 6l-6 6 6 6"/>',
+  tv: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+  download: '<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  film: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>',
+  flow: '<path d="M3 6h4c5 0 5 12 10 12h4M3 18h4c2.2 0 3.3-2.3 4.4-5M13.6 11C14.7 8.3 15.8 6 18 6h3"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
+  plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/>',
+  expand: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
 };
 function icon(name, size = 16) {
   return `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ""}</svg>`;
