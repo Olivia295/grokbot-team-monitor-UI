@@ -90,6 +90,18 @@ def _collect(cache: Cache, now_ms: int) -> tuple[dict[str, dict], list[dict], li
                 if source:
                     mine["handoffsIn"] += 1
                     mine["partners"][source["id"]] = mine["partners"].get(source["id"], 0) + 1
+                    if cache.box:
+                        # On the box only the receiver's copy exists: credit the sender from here.
+                        theirs = stats.setdefault(source["id"], _empty_stats())
+                        theirs["handoffsOut"] += 1
+                        theirs["partners"][agent_id] = theirs["partners"].get(agent_id, 0) + 1
+                        mark(at, source["id"], "handoffs")
+                        day = day_of(at)
+                        if day is not None:
+                            key = "|".join(sorted([source["id"], agent_id]))
+                            day["pairs"][key] = day["pairs"].get(key, 0) + 1
+                        feed.append({"kind": "handoff", "at": at, "from": source["id"], "to": agent_id,
+                                     "toName": "", "text": _plain(text, FEED_CHARS)})
                 else:
                     mine["asks"] += 1
                     mark(at, agent_id, "asks")
@@ -100,6 +112,15 @@ def _collect(cache: Cache, now_ms: int) -> tuple[dict[str, dict], list[dict], li
                 target = _ref(entry, "toAgent")
                 text = _plain(entry.get("content"))
                 output(at, text)
+                if entry.get("boxReply"):
+                    # Box reading: the bot answered you (time only, no text).
+                    mine["replies"] += 1
+                    mark(at, agent_id, "replies")
+                    started = waiting.pop(request, None) if request else None
+                    if started and at >= started:
+                        mine["responseMs"].append(at - started)
+                    feed.append({"kind": "reply", "at": at, "from": agent_id, "to": "you", "text": ""})
+                    continue
                 if target:
                     mark(at, agent_id, "handoffs")
                     day = day_of(at)

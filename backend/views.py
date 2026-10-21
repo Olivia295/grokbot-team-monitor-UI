@@ -55,8 +55,8 @@ def use_box(settings: dict, box: bool | None = None) -> bool:
         return box
     if os.environ.get("GROK_COLLAB_DEMO") == "1" or os.environ.get("GROK_COLLAB_EVENTS", "").strip():
         return False
-    if settings.get("readMode", "auto") == "external":
-        return False
+    # On a Grok Bot box there is no app cache to read "externally": that would only be the demo
+    # team. So a box always reads itself; readMode only matters where both are possible.
     return bool(mode_status()["internal_available"])
 
 

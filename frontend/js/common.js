@@ -398,7 +398,7 @@ function agentTip(id) {
   return `<b>${esc(nameOf(id))}</b>${agent?.title ? ` · ${esc(agent.title)}` : ""}${level ? ` · Lv${level.level}` : ""}
     ${agent ? `<div class="soft">${esc(roomName(wingOf(agent)))} · ${esc(stateText(agent))}${agent.state !== "idle" ? `：${esc(detailText(agent))}` : ""}</div>` : ""}
     ${agent?.roleLine ? `<div>${esc(masked(agent.roleLine))}</div>` : ""}
-    <div class="soft">${t("tip.counts", { out, got })}${profile ? ` · ${t("tip.chars", { n: number(profile.chars) })}` : ""}</div>`;
+    <div class="soft">${t("tip.counts", { out, got })}${profile ? ` · ${S.office?.source?.box ? t("tip.outputs", { n: number(profile.outputs) }) : t("tip.chars", { n: number(profile.chars) })}` : ""}</div>`;
 }
 
 // ---------------------------------------------------------------- line icons

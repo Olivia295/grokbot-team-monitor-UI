@@ -177,6 +177,29 @@ def _profile_names(config: BoxConfig, willow_ids: set[str]) -> dict[str, str]:
     return found
 
 
+def _profile_looks(config: BoxConfig, willow_ids: set[str]) -> dict[str, dict]:
+    """avatarShape / avatarColor / title from each profile.json (never the description)."""
+    root = config.agent_data / "agents"
+    if is_forbidden(root, config) or not root.is_dir():
+        return {}
+    found: dict[str, dict] = {}
+    try:
+        children = list(guarded_scandir(root, config))
+    except (OSError, PrivacyError):
+        return {}
+    for entry in children:
+        if entry.name in willow_ids or is_forbidden(entry.path, config):
+            continue
+        try:
+            payload = json.loads((Path(entry.path) / "profile.json").read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError):
+            continue
+        if isinstance(payload, dict):
+            found[entry.name] = {key: payload[key].strip()[:40] for key in ("avatarShape", "avatarColor", "title")
+                                 if isinstance(payload.get(key), str) and payload[key].strip()}
+    return found
+
+
 def _roster_rows(bots: list[dict], extra: dict[str, str]) -> tuple[list[dict], dict[str, str], dict[str, str]]:
     """Office roster rows, plus name→id and id→name maps. Willow keeps a name and nothing else."""
     rows: list[dict] = []
@@ -240,8 +263,8 @@ def _sections(groups: list[dict], name_to_id: dict[str, str]) -> list[dict]:
     return sections
 
 
-def _activity(entry_id: str, at: int, request_id: str) -> dict:
-    return {
+def _activity(entry_id: str, at: int, request_id: str, reply_to_you: bool = False) -> dict:
+    entry = {
         "kind": "message",
         "role": "assistant",
         "id": entry_id,
@@ -250,6 +273,10 @@ def _activity(entry_id: str, at: int, request_id: str) -> dict:
         "content": "",
         "isStreaming": False,
     }
+    if reply_to_you:
+        # The bot's answer to your message. Its text is never kept, but it counts as a reply.
+        entry["boxReply"] = True
+    return entry
 
 
 def _user_entry(entry_id: str, at: int, request_id: str, content: str, sender: tuple[str, str] | None) -> dict:
@@ -318,7 +345,7 @@ def _transcripts(
                 sender = None
             entries.append(_user_entry(entry_id, at, request_id, content, sender))
             if reply is not None:
-                entries.append(_activity(reply[0], reply[2], request_id))
+                entries.append(_activity(reply[0], reply[2], request_id, reply_to_you=sender is None))
                 index += 1
             index += 1
         last = max((item["timestampMs"] for item in entries), default=0)
@@ -431,6 +458,12 @@ def load_box_cache(config: BoxConfig | None = None) -> Cache:
     except (OSError, PrivacyError):
         profiles = {}
     rows, name_to_id, id_to_name = _roster_rows(bots, profiles)
+    looks = _profile_looks(config, willow_ids)
+    for row in rows:
+        look = looks.get(row["id"], {})
+        row["avatarShape"] = row["avatarShape"] or look.get("avatarShape", "")
+        row["avatarColor"] = row["avatarColor"] or look.get("avatarColor", "")
+        row["title"] = row["title"] or look.get("title", "")
     names = sorted(name_to_id, key=len, reverse=True)
     db_path = config.agent_data / "search-index.db"
     messages = [] if is_forbidden(db_path, config) else load_messages(db_path, willow_ids)

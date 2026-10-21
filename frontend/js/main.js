@@ -24,6 +24,8 @@ function paintSource() {
   }
   pill.dataset.status = status;
   pill.textContent = label;
+  // Box mode hides what the box can't measure (quota, characters written, app schedules).
+  document.body.classList.toggle("box-mode", Boolean(source.box) && !STATIC);
   banner.hidden = !note;
   banner.innerHTML = note;
 }

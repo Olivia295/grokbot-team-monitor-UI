@@ -30,7 +30,8 @@ class ReadModeTest(unittest.TestCase):
     def test_auto_reads_the_box_only_when_on_one(self):
         os.environ["BOT_OFFICE_INTERNAL"] = "1"
         self.assertTrue(views.use_box(clean({})))
-        self.assertFalse(views.use_box(clean({"readMode": "external"})))
+        # A box always reads itself: "external" there would only be the demo team.
+        self.assertTrue(views.use_box(clean({"readMode": "external"})))
         os.environ["BOT_OFFICE_INTERNAL"] = "0"
         self.assertFalse(views.use_box(clean({})))
         self.assertFalse(views.use_box(clean({"readMode": "internal"})))  # not on a box: nothing to read

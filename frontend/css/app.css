@@ -770,3 +770,6 @@ body.static-demo .local-only{display:none!important}
 }
 /* the internal panel is part of the full dashboard, not the big screen or the overlay */
 body.tv #internal-panel,body.overlay #internal-panel{display:none!important}
+/* box mode: only what the box really records */
+body.box-mode #fuel{display:none}
+body.box-mode .hero{grid-template-columns:minmax(0,1fr)}

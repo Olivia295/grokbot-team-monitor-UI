@@ -19,7 +19,10 @@ function renderHero() {
     [flows?.flowCount ?? "—", t("tile.flows", { window: windowLabel(S.hours) })],
     [flows?.handoffCount ?? "—", t("tile.handoffs")],
     [totals ? number(totals.replies) : "—", t("tile.replies")],
-    [totals ? number(totals.chars) : "—", t("tile.chars")],
+    // The box keeps no message text, so count what it does record: bot outputs.
+    office.source?.box
+      ? [totals ? number(totals.hours.reduce((a, b) => a + b, 0)) : "—", t("tile.outputs")]
+      : [totals ? number(totals.chars) : "—", t("tile.chars")],
   ].map(([value, text]) => `<div class="tile"><b>${value}</b><span>${esc(text)}</span></div>`).join("");
   renderHeroArt();
   const usage = office.usage;
@@ -345,6 +348,9 @@ function renderRhythm() {
 }
 
 function renderAutomations() {
+  // Schedules live on the platform's servers; the box never sees them, so the card would always be empty.
+  const card = $("#automations")?.closest(".insight");
+  if (card) card.hidden = Boolean(S.office?.source?.box);
   const profiles = S.insights?.profiles || [];
   const active = [];
   const gone = [];
@@ -443,8 +449,9 @@ function openProfile(id) {
   const level = levelOf(id);
   const tiles = profile ? [
     [profile.replies, t("profile.replies")], [profile.handoffsOut, t("profile.out")], [profile.handoffsIn, t("profile.in")],
-    [number(profile.chars), t("profile.chars")], [profile.medianResponseMs != null ? span(profile.medianResponseMs) : "—", t("profile.speed")],
-    [profile.automations.filter((a) => a.active).length, t("profile.autos")],
+    S.office?.source?.box ? [number(profile.outputs), t("profile.outputsTile")] : [number(profile.chars), t("profile.chars")],
+    [profile.medianResponseMs != null ? span(profile.medianResponseMs) : "—", t("profile.speed")],
+    ...(S.office?.source?.box ? [] : [[profile.automations.filter((a) => a.active).length, t("profile.autos")]]),
   ] : [];
   $("#profile-body").innerHTML = `
     <div class="p-hero" style="--sec-soft:${softVar(id)}"><span class="pedestal">${avatarSVG(lookAgent(id), 120)}</span><div style="min-width:0">

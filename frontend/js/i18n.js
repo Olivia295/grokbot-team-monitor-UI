@@ -349,3 +349,11 @@ Object.assign(I18N.en, {
   "set.overlayHint": "In OBS, add a Browser source with the overlay URL. The background is transparent and only the studio stage shows. Add &view=stars or &view=track for another view.",
   "about.static": "This is the online demo: settings are only saved in this browser. To see your own bots, run Bot Office on your machine.",
 });
+Object.assign(I18N.zh, {
+  "tile.outputs": "bot 的输出（累计）", "tip.outputs": "一共输出 {n} 条", "profile.outputsTile": "输出条数",
+  "set.readModeLocked": "在 Grok Bot 本机上运行时，始终读取本机记录（这台电脑上没有 Grok Bot 应用缓存，外部读取只会是演示数据）。",
+});
+Object.assign(I18N.en, {
+  "tile.outputs": "Bot outputs (all time)", "tip.outputs": "{n} outputs", "profile.outputsTile": "Outputs",
+  "set.readModeLocked": "On a Grok Bot box, Bot Office always reads the box (there is no Grok Bot app cache here, so external reading would only be demo data).",
+});

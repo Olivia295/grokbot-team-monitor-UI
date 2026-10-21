@@ -74,8 +74,10 @@ function renderReadMode() {
   const internal = $('#readModeSel option[value="internal"]');
   if (internal) internal.disabled = !available;
   $("#read-mode-hint").textContent = available
-    ? t("set.readModeOn", { mode: t(boxMode.mode === "internal" ? "mode.internal" : "mode.external") })
+    ? t("set.readModeLocked")
     : t("mode.unavailable");
+  // On a box the choice is fixed (always the box); elsewhere there is nothing to choose.
+  $("#readModeSel").closest(".field").querySelector("select").hidden = true;
 }
 function renderSource() {
   const node = $("#source-status");

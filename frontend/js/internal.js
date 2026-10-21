@@ -46,7 +46,9 @@ function syncModeChrome() {
     internal.removeAttribute("aria-describedby");
   }
   // Most people never run on a box: only show the switch where it can do something.
-  document.getElementById("mode-switch").hidden = !available && !S.modeRequestFailed;
+  // Off a box there is nothing to switch to; on a box "external" would only be the demo team.
+  // So the switch stays hidden, and only shows up to offer a retry when /api/mode fails.
+  document.getElementById("mode-switch").hidden = !S.modeRequestFailed;
   const panel = document.getElementById("internal-panel");
   if (panel) panel.hidden = S.dataMode !== "internal";
 }

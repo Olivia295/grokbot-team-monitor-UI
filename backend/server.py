@@ -172,7 +172,8 @@ class Handler(BaseHTTPRequestHandler):
                 settings = load_settings()
                 status = mode_status()
                 status.update(setting=settings.get("readMode", "auto"),
-                              mode="internal" if use_box(settings, None) else "external")
+                              mode="internal" if use_box(settings, None) else "external",
+                              locked=bool(status["internal_available"]))
                 self._json(status)
             elif path == "/api/internal":
                 self._internal()
