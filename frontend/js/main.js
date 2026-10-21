@@ -19,6 +19,7 @@ function paintSource() {
   } else if (source.box) {
     [status, label] = ["ok", t("pill.box")];
     if (source.empty) note = esc(t("box.empty"));
+    else if (source.rosterMissing) note = esc(t("box.noRoster"));
   } else if (source.kind === "events") {
     label = S.office.appOnline ? t("pill.events") : t("pill.eventsQuiet");
   }

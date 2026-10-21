@@ -230,8 +230,8 @@ Bot协作室也可以直接跑在 **Grok Bot 本机**（bot 们干活的那台�
 | 本周额度 | 本机没有（面板会写明） | **真实**的剩余百分比、套餐和重置日期 |
 | 消息内容 | 只保留简短的交接标题（Willow Mage 一律不显示）；你自己的消息只留时间和对象 | 完整内容（可用隐私模式隐藏） |
 
-- **什么时候可用**：`/workspace/roster.md` 和 `/home/box/agent-data` 都存在时才能本机读取；`BOT_OFFICE_INTERNAL=1` 强制打开，`=0` 强制关闭。**设置 → 数据来源 → 读取方式** 选「自动」时，能本机读取就本机读取。顶栏开关会把选择保存下来，页面、提醒、大屏和菜单栏小程序一起切换。不在本机时，本机读取选项会禁用，`/api/internal` 返回 403。
-- **永远不读的东西**：Notion Nexus 的 `inbox` / `snapshots` / `raw`、`~/.codex`、`~/.grok`、`auth.json`、名字里带 `token` 的文件、`*.env`，以及名字里有「周记」「日记」的文件。Willow Mage 和其他 bot 一样出现，但只显示工作信息：是否在工作、最近活跃时间、消息条数、交给她或她交出的活有没有得到回复。她的消息正文不会从索引里读出，她的文件夹和职责说明不会被读取，她写的和发给她的内容在所有地方（包括提醒、回放、GIF 和周报）都显示成「（Willow 内容不显示）」。其他看起来涉及个人情绪的交接标题会显示成「（内容已隐藏）」。SQLite 索引以只读方式（`mode=ro`）打开。
+- **什么时候可用**：只要 `/home/box/agent-data` 里有 bot（消息索引或 agent 设置文件）就能本机读取；`/workspace/roster.md` 可选，但建议写一份（见下文）；`BOT_OFFICE_INTERNAL=1` 强制打开，`=0` 强制关闭。**设置 → 数据来源 → 读取方式** 选「自动」时，能本机读取就本机读取。顶栏开关会把选择保存下来，页面、提醒、大屏和菜单栏小程序一起切换。不在本机时，本机读取选项会禁用，`/api/internal` 返回 403。
+- **永远不读的东西**：Notion Nexus 的 `inbox` / `snapshots` / `raw`、`~/.codex`、`~/.grok`、`auth.json`、名字里带 `token` 的文件、`*.env`，以及名字里有「周记」「日记」的文件。Willow Mage（以及名册「Bot协作室隐私」表里列出的 bot）和其他 bot 一样出现，但只显示工作信息：是否在工作、最近活跃时间、消息条数、交给她或她交出的活有没有得到回复。她的消息正文不会从索引里读出，她的文件夹和职责说明不会被读取，她写的和发给她的内容在所有地方（包括提醒、回放、GIF 和周报）都显示成「（Willow 内容不显示）」。其他看起来涉及个人情绪的交接标题会显示成「（内容已隐藏）」。SQLite 索引以只读方式（`mode=ro`）打开。
 - **不拿演示数据凑数**：还没有记录时，本机模式显示「本机暂无协作记录」，不会换成演示团队。
 
 **所有信息都来自盒子上已有的文件**，bot 们不需要为Bot协作室额外写任何东西：
@@ -254,6 +254,25 @@ Bot协作室也可以直接跑在 **Grok Bot 本机**（bot 们干活的那台�
   - 名字像凭证的文件都不打开：`*secret*`、`*cookie*`、`*token*`、`*password*`、`auth.json`、`*.env`、各种密钥文件。各 agent 的 `store.db` 也不打开。
   - 每个 bot 文件夹里的 `inbox` / `snapshots` / `raw` 都不读，不只是 Notion Nexus 的。
   - 如果Bot协作室自己的设置文件放在 `/workspace` 里（所有 bot 都能读到里面的 Webhook 密钥），面板和设置页会提醒你，可以用 `GROK_COLLAB_SETTINGS=~/.config/bot-office/settings.json` 挪出去。
+
+### roster.md：建议写一份，可以让盒子里的 agent 帮你写
+
+没有名册时本机读取也能用：每个 bot 的名字、头衔和头像会从 `profile.json` 读取，面板会提示名册缺失。`/workspace/roster.md` 能补上盒子自己不知道的信息：
+
+- **房间**：按你的侧栏分组来分，并显示每个 bot 只做的一件事、怎么触发
+- **旧名对照**：旧日志里的旧名字也能认出来
+- **文件夹和日志**：每个 bot 的文件夹和日志都能对上，不用只靠名字去猜
+- **推送时间表**：Bot协作室能告诉你今天的推送发了没有。定时任务存在平台服务器上，盒子里看不到
+- **私密 bot**：只显示工作信息，永远不显示它们说的话
+- **一份共用的团队说明**：给你的 bot 们看，谁做什么、文件夹归谁、交接怎么写
+
+三种生成方式，都在 **[box/README.md](box/README.md)** 里有说明：
+
+1. 在本机面板里点「下载名册草稿」，草稿会用盒子上已有的文件自动填好。
+2. 把仓库拉到盒子上，把写好的那段话发给你的主力 bot。它用一条命令（`/api/roster-draft`）就能拿到同一份草稿，花的额度很少。
+3. 手动复制 [`box/roster.template.md`](box/roster.template.md) 或 [`box/roster.template.en.md`](box/roster.template.en.md)。
+
+Bot协作室按标题读取名册里的表格，中文英文都认，而且从不写入名册。
 
 ### 从别的地方打开本机的办公室
 
@@ -348,6 +367,7 @@ integrations/    bot_office.py：事件日志的 Python 客户端，复制即用
 examples/        simulate_events.py：模拟一个团队，体验事件适配器
 scripts/         build_pages.py：把在线演示构建到 site/
 packaging/       homebrew/ 配方 · macos/ 菜单栏小程序
+box/             roster.md 模板，以及在 Grok Bot 电脑上生成名册的方法
 docs/            events.md、logo 和截图
 tests/           单元测试
 start.sh · start.command · start.bat · pyproject.toml

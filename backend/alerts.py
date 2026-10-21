@@ -23,7 +23,7 @@ import urllib.request
 from collections import deque
 from datetime import datetime
 
-from .box_source import HIDDEN_TITLE, WILLOW_HIDDEN
+from .box_source import HIDDEN_TITLE, PRIVATE_HIDDEN, WILLOW_HIDDEN
 from .settings import load_settings
 from .views import MASK, flows_view, office_view
 
@@ -68,7 +68,7 @@ def _lang(settings: dict) -> str:
 def _clean_text(text: str) -> str:
     text = " ".join(str(text or "").split())
     # Placeholders carry no content; an alert is clearer without them.
-    if text in (MASK, WILLOW_HIDDEN, HIDDEN_TITLE):
+    if text in (MASK, WILLOW_HIDDEN, PRIVATE_HIDDEN, HIDDEN_TITLE):
         return ""
     return text[: TEXT_CHARS - 1] + "…" if len(text) > TEXT_CHARS else text
 

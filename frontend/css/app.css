@@ -781,3 +781,6 @@ body.tv #internal-panel,body.overlay #internal-panel{display:none!important}
 .change-list li{display:grid;grid-template-columns:86px minmax(0,1fr);gap:8px;font-size:13px}
 .change-list time{color:var(--muted);font-variant-numeric:tabular-nums}
 .warn-note{color:#b4232a}
+.roster-tools{display:flex;justify-content:flex-end}
+.roster-tools .small-btn,.roster-banner .small-btn{margin:0;text-decoration:none;color:inherit;border:1px solid var(--line-2);border-radius:999px;background:var(--card)}
+.roster-banner span:nth-child(2){flex:1;min-width:220px}

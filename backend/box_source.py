@@ -49,12 +49,13 @@ from .internal_box import (
     default_config,
     is_forbidden,
     is_separator_line,
-    load_roster,
     next_nonempty,
     read_log,
     split_table_row,
     connect_ro,
     find_dispatcher,
+    empty_extras,
+    load_bots,
     load_extras,
     read_profiles,
     resolve_folders,
@@ -64,6 +65,7 @@ PREFIX_WINDOW = 30
 TITLE_CHARS = 40
 HIDDEN_TITLE = "（内容已隐藏）"
 WILLOW_HIDDEN = "（Willow 内容不显示）"
+PRIVATE_HIDDEN = "（私密内容不显示）"  # other bots the roster marks private
 SENSITIVE = ("心情", "情绪", "感受", "难过", "焦虑", "抑郁", "日记", "周记", "mood", "feel", "willow")
 
 YOUR_TURN_MS = 12 * 3600 * 1000
@@ -88,11 +90,12 @@ ORDER BY agent_id, timestamp_ms, COALESCE(seq, 0), entry_id
 
 # The dispatcher writes 「她的原话」 then 「我的理解」, in brackets, bold or as headings.
 def _section(word: str) -> re.Pattern[str]:
-    return re.compile(r"(?:【|\[|\*\*|#{1,6}\s*)?\s*" + word + r"\s*(?:】|\]|\*\*)?\s*[:：]?")
+    return re.compile(r"(?:【|\[|\*\*|#{1,6}\s*)?\s*(?:" + word + r")\s*(?:】|\]|\*\*)?\s*[:：]?")
 
 
-ORIGINAL_RE = _section("她的原话")
-UNDERSTANDING_RE = _section("我的理解")
+# 「她的原话」 in the original box; other people write 他的原话 / 原话 / Original request.
+ORIGINAL_RE = _section(r"(?:(?:她|他|TA|用户)的)?原话|原始需求|(?i:original request|their words)")
+UNDERSTANDING_RE = _section(r"我的理解|(?i:my understanding)")
 _messages_memo: dict[tuple, list[tuple]] = {}
 
 
@@ -111,13 +114,19 @@ def empty_box_cache(support: Path | None = None) -> Cache:
     return cache
 
 
-def _willow_ids(bots: list[dict]) -> set[str]:
+def _willow_ids(bots: list[dict], private: set[str] | frozenset = frozenset()) -> set[str]:
+    """Ids of private bots (metadata only): Willow Mage, plus any bot roster.md marks private."""
     found = {WILLOW_ID}
     for bot in bots:
-        if bot.get("name") == WILLOW_NAME or bot.get("id") == WILLOW_ID:
+        if bot.get("name") == WILLOW_NAME or bot.get("id") == WILLOW_ID or bot.get("name") in private:
             if isinstance(bot.get("id"), str) and bot["id"]:
                 found.add(bot["id"])
     return found
+
+
+def _placeholder(*ids_and_names: str | None) -> str:
+    """Willow keeps her own placeholder; any other private bot gets the generic one."""
+    return WILLOW_HIDDEN if WILLOW_ID in ids_and_names or WILLOW_NAME in ids_and_names else PRIVATE_HIDDEN
 
 
 def _is_willow(agent_id: str | None, name: str | None, willow_ids: set[str]) -> bool:
@@ -232,7 +241,8 @@ def _profile_names(config: BoxConfig, willow_ids: set[str]) -> dict[str, str]:
     return {agent_id: fields["name"] for agent_id, fields in read_profiles(config, willow_ids).items()}
 
 
-def _roster_rows(bots: list[dict], extra: dict[str, dict]) -> tuple[list[dict], dict[str, str], dict[str, str]]:
+def _roster_rows(bots: list[dict], extra: dict[str, dict],
+                 private: set[str] | frozenset = frozenset()) -> tuple[list[dict], dict[str, str], dict[str, str]]:
     """Office roster rows, plus name→id and id→name maps.
 
     Willow's role line is her roster label. The duty column (只做的一件事) is not copied.
@@ -246,7 +256,7 @@ def _roster_rows(bots: list[dict], extra: dict[str, dict]) -> tuple[list[dict], 
         name = str(bot.get("name") or "")
         if not bot_id or not name:
             continue
-        willow = name == WILLOW_NAME or bot_id == WILLOW_ID
+        willow = name == WILLOW_NAME or bot_id == WILLOW_ID or name in private
         label = str(bot.get("label") or "")
         profile = extra.get(bot_id, {})
         row = {
@@ -353,7 +363,7 @@ def _transcripts(
     for agent_id, rows in grouped.items():
         if agent_id not in id_to_name:
             # A message for someone with no roster row and no profile name still needs a seat.
-            id_to_name[agent_id] = agent_id
+            id_to_name[agent_id] = WILLOW_NAME if agent_id == WILLOW_ID else agent_id
         entries: list[dict] = []
         index = 0
         owner_willow = _is_willow(agent_id, id_to_name.get(agent_id), willow_ids)
@@ -383,10 +393,11 @@ def _transcripts(
                 continue
             if handoff:
                 # Her words, and anything addressed to her, stay behind the placeholder.
-                content = WILLOW_HIDDEN if sender_willow or owner_willow else handoff_title(body)
+                content = (_placeholder(sender_id, sender_name, agent_id, own_name)
+                           if sender_willow or owner_willow else handoff_title(body))
                 sender = (sender_id, sender_name)
             elif owner_willow:
-                content = WILLOW_HIDDEN
+                content = _placeholder(agent_id, own_name)
                 sender = None
             else:
                 # You → this bot. Metadata only: time is the timestamp, target is the transcript owner.
@@ -451,7 +462,7 @@ def _dispatch_edges(
         # Keep rows on the same day in file order without collapsing them.
         stamp += index
         # A dispatch aimed at Willow is a handoff to her: keep the link, hide the task text.
-        title = WILLOW_HIDDEN if _is_willow(target_id, bot_cell, willow_ids) else task_title(task)
+        title = _placeholder(target_id, bot_cell) if _is_willow(target_id, bot_cell, willow_ids) else task_title(task)
         found.append((target_id, title, stamp, f"dispatch:{index}:{target_id}"))
     return found
 
@@ -534,17 +545,18 @@ def load_box_cache(config: BoxConfig | None = None) -> Cache:
     """Cache for internal mode. Never a demo team. Missing data is an explicit empty cache."""
     config = config if config is not None else default_config()
     try:
-        bots, groups = load_roster(config)
+        bots, groups, roster_source = load_bots(config)
     except (OSError, PrivacyError, BoxError, ValueError, UnicodeError):
         return empty_box_cache(config.agent_data)
 
-    willow_ids = _willow_ids(bots)
+    extras = load_extras(config, [bot["name"] for bot in bots]) if roster_source == "roster" else empty_extras()
+    private = set(extras["private"])
+    willow_ids = _willow_ids(bots, private)
     try:
         profiles = read_profiles(config, willow_ids)
     except (OSError, PrivacyError):
         profiles = {}
-    rows, name_to_id, id_to_name = _roster_rows(bots, profiles)
-    extras = load_extras(config, [bot["name"] for bot in bots])
+    rows, name_to_id, id_to_name = _roster_rows(bots, profiles, private)
     aliases = {old: new for old, new in extras["aliases"].items() if new in name_to_id}
     resolve_folders(config, bots, extras)
     dispatcher, dispatch_path = find_dispatcher(config, bots)
@@ -603,4 +615,5 @@ def load_box_cache(config: BoxConfig | None = None) -> Cache:
     cache.box = True
     cache.demo = False
     cache.empty = not _has_records(transcripts)
+    cache.roster_missing = roster_source != "roster"
     return cache

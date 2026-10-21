@@ -230,8 +230,8 @@ Bot Office can also run **inside the Grok Bot box** (the machine your bots work 
 | Weekly quota | Not available on the box (the panel says so) | **Real** percentage, plan and reset date |
 | Message text | Short handoff titles only (none for Willow Mage). Your own messages keep only time and recipient | Full text (hide it with privacy mode) |
 
-- **When it switches on**: internal reading is available when both `/workspace/roster.md` and `/home/box/agent-data` exist. `BOT_OFFICE_INTERNAL=1` forces it on and `=0` forces it off. With **Settings → Data source → Reading mode** on *Automatic*, the box is read whenever it's available. The header switch saves your choice for the page, alerts, the big screen and the menu-bar app together. Off the box, the internal option is disabled and `/api/internal` answers 403.
-- **What it never reads**: Notion Nexus `inbox` / `snapshots` / `raw`, `~/.codex`, `~/.grok`, `auth.json`, anything with `token` in its name, `*.env`, and files named 周记 / 日记. Willow Mage appears like the other bots but as work metadata only: whether she's working, when she was last active, how many messages, and whether a handoff to or from her was answered. Her message bodies are never selected from the index, her folder and duty text are never read, and anything she wrote or was sent shows as "(Willow content hidden)" everywhere, including alerts, replays, GIFs and reports. Other handoff titles that look personal are replaced with "(hidden)". The SQLite index is opened read-only (`mode=ro`).
+- **When it switches on**: internal reading is available whenever `/home/box/agent-data` holds bots (a message index or agent profiles). `/workspace/roster.md` is optional but recommended (see below). `BOT_OFFICE_INTERNAL=1` forces it on and `=0` forces it off. With **Settings → Data source → Reading mode** on *Automatic*, the box is read whenever it's available. The header switch saves your choice for the page, alerts, the big screen and the menu-bar app together. Off the box, the internal option is disabled and `/api/internal` answers 403.
+- **What it never reads**: Notion Nexus `inbox` / `snapshots` / `raw`, `~/.codex`, `~/.grok`, `auth.json`, anything with `token` in its name, `*.env`, and files named 周记 / 日记. Willow Mage, and any bot listed in the roster's privacy table, appears like the other bots but as work metadata only: whether she's working, when she was last active, how many messages, and whether a handoff to or from her was answered. Her message bodies are never selected from the index, her folder and duty text are never read, and anything she wrote or was sent shows as "(Willow content hidden)" everywhere, including alerts, replays, GIFs and reports. Other handoff titles that look personal are replaced with "(hidden)". The SQLite index is opened read-only (`mode=ro`).
 - **No demo stand-ins**: with no records yet, the box view says "No box collaboration records yet" instead of showing the demo team.
 
 **Everything comes from files the box already has**; the bots don't write anything extra for Bot Office:
@@ -242,6 +242,25 @@ Bot Office can also run **inside the Grok Bot box** (the machine your bots work 
 - **Run tables count.** A log kept as a table with a result column plus rounds or retries (like CodexCodex's) is summarised as runs, retries, failures and average rounds.
 - **Times use the box's own clock** and timezone. The message index is only re-read when it (or its `-wal` file, where new messages land first) changes.
 - **Secrets stay closed.** Files whose names look like credentials are never opened: `*secret*`, `*cookie*`, `*token*`, `*password*`, `auth.json`, `*.env`, keys. Neither is any agent's `store.db`. An `inbox` / `snapshots` / `raw` folder is closed in every bot folder, not just Notion Nexus's. If Bot Office's own settings file sits inside `/workspace`, where every bot can read its webhook secrets, the panel and the settings page say so. Set `GROK_COLLAB_SETTINGS=~/.config/bot-office/settings.json` to move it.
+
+### roster.md: recommended, and your box agent can write it
+
+Without a roster, box reading still works: every bot's name, title and avatar come from its `profile.json`, and the panel says the roster is missing. A `/workspace/roster.md` adds what the box can't know on its own:
+
+- **Rooms** from your sidebar groups, and each bot's role line and trigger
+- **Old names** that still match in old logs
+- **Folders and logs** for each bot, beyond the name-based guess
+- **The push schedule**, so Bot Office can tell you whether today's push went out. Schedules live on the platform's servers, not on the box.
+- **Private bots** that show work only, never their words
+- **One shared description of the team** for your bots: who does what, who owns which folder, and how handoffs are written
+
+Three ways to make one, all explained in **[box/README.md](box/README.md)**:
+
+1. Click **Download roster draft** in the box panel. It's pre-filled from the box's own files.
+2. Pull this repo onto the box and paste the ready-made prompt to your lead bot. It fetches the same draft with one command (`/api/roster-draft`), so it costs little.
+3. Copy [`box/roster.template.en.md`](box/roster.template.en.md) or [`box/roster.template.md`](box/roster.template.md) by hand.
+
+Bot Office reads the roster's tables by heading, in English or Chinese, and never writes it.
 
 ### Opening the box's office from elsewhere
 
@@ -336,6 +355,7 @@ integrations/    bot_office.py: drop-in Python client for the event log
 examples/        simulate_events.py: a fake team to try the event adapter
 scripts/         build_pages.py: builds the static online demo into site/
 packaging/       homebrew/ formula · macos/ menu-bar app
+box/             roster.md templates and how to generate one on your Grok Bot box
 docs/            events.md, logo and screenshots
 tests/           unit tests
 start.sh · start.command · start.bat · pyproject.toml

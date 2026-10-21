@@ -93,6 +93,7 @@ def _source(cache: Cache) -> dict:
         "kind": cache.source,
         "box": bool(cache.box),
         "empty": bool(cache.box and cache.empty),
+        "rosterMissing": bool(getattr(cache, "roster_missing", False)),
         "supportDir": "" if cache.demo else str(cache.support),
         "found": bool(cache.roster),
     }

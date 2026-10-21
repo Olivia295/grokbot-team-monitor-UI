@@ -30,7 +30,7 @@ FRONTEND = ROOT / "frontend"
 try:  # installed package (pipx, uvx, Homebrew) or python -m backend.server
     from .alerts import AlertWatcher
     from .events import append_events
-    from .internal_box import BoxError, PrivacyError, DEFAULT_WORKSPACE, build, mode_status
+    from .internal_box import BoxError, PrivacyError, DEFAULT_WORKSPACE, build, mode_status, roster_draft
     from .settings import SettingsError, load_settings, save_settings, settings_path
     from .views import flows_view, ingest_path, insights_view, office_view, use_box
 except ImportError:  # python3 backend/server.py from a checkout
@@ -38,7 +38,7 @@ except ImportError:  # python3 backend/server.py from a checkout
         sys.path.insert(0, str(ROOT))
     from backend.alerts import AlertWatcher
     from backend.events import append_events
-    from backend.internal_box import BoxError, PrivacyError, DEFAULT_WORKSPACE, build, mode_status
+    from backend.internal_box import BoxError, PrivacyError, DEFAULT_WORKSPACE, build, mode_status, roster_draft
     from backend.settings import SettingsError, load_settings, save_settings, settings_path
     from backend.views import flows_view, ingest_path, insights_view, office_view, use_box
 
@@ -185,6 +185,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(status)
             elif path == "/api/internal":
                 self._internal()
+            elif path == "/api/roster-draft":
+                self._roster_draft(query)
             else:
                 self.send_error(404)
             return
@@ -284,6 +286,25 @@ class Handler(BaseHTTPRequestHandler):
             return
         payload["settingsInWorkspace"] = settings_in_workspace()
         self._json(payload)
+
+    def _roster_draft(self, query: dict) -> None:
+        """A roster.md draft to download (or for a box agent to fetch). Nothing is written on the box."""
+        if not mode_status()["internal_available"]:
+            self._json({"error": "only available on a Grok Bot box", "internal_available": False}, status=403)
+            return
+        language = "en" if (query.get("lang") or [""])[0] == "en" else "zh"
+        try:
+            body = roster_draft(language=language).encode("utf-8")
+        except (OSError, ValueError) as error:
+            self._json({"error": str(error)}, status=500)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/markdown; charset=utf-8")
+        self.send_header("Content-Disposition", 'attachment; filename="roster.md"')
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _html(self, status: int, body: str) -> None:
         data = body.encode("utf-8")

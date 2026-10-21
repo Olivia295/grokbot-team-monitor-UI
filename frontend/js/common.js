@@ -310,11 +310,13 @@ function detailText(agent) {
   return t(`detail.${agent.detail || "idle"}`, { name: agent.detailParam || t("who.teammate") });
 }
 const WILLOW_PLACEHOLDERS = new Set(["（Willow 内容不显示）", "(Willow content hidden)"]);
+const PRIVATE_PLACEHOLDER = "（私密内容不显示）";  // other bots the roster marks private
 function isWillowPlaceholder(text) {
-  return WILLOW_PLACEHOLDERS.has(text);
+  return WILLOW_PLACEHOLDERS.has(text) || text === PRIVATE_PLACEHOLDER;
 }
 function masked(text) {
   if (text === "•••") return t("privacy.hidden");
+  if (text === PRIVATE_PLACEHOLDER) return t("private.hidden");
   if (isWillowPlaceholder(text)) return t("willow.hidden");
   return text;
 }

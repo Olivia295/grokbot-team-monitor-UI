@@ -191,13 +191,19 @@ def mode_status(config: BoxConfig | None = None) -> dict:
     cfg = config if config is not None else default_config()
     roster_ok = cfg.roster_path.is_file()
     agent_ok = cfg.agent_data.is_dir()
+    bots_ok = agent_ok and ((cfg.agent_data / "search-index.db").is_file() or (cfg.agent_data / "agents").is_dir())
     if roster_ok and agent_ok:
-        return {"internal_available": True, "reason": "roster.md and agent-data present"}
+        return {"internal_available": True, "reason": "roster.md and agent-data present", "roster": True}
+    if bots_ok:
+        # roster.md is optional: without it, bots come from their profile.json files.
+        return {"internal_available": True, "reason": "agent-data present; roster.md missing, reading bot profiles", "roster": False}
     parts: list[str] = []
     if not roster_ok:
         parts.append("roster.md missing")
     if not agent_ok:
         parts.append("agent-data is not a directory")
+    elif not bots_ok:
+        parts.append("agent-data has no bots yet")
     return {"internal_available": False, "reason": "; ".join(parts)}
 
 
@@ -331,27 +337,50 @@ def extract_table_after(text: str, heading: str) -> list[list[str]]:
     return data
 
 
+# Section headings in roster.md, Chinese or English (see box/roster.template*.md).
+BOTS_HEADING = re.compile(r"名单|\broster\b|\bbots\b", re.I)
+GROUPS_HEADING = re.compile(r"侧栏分组|分组|sidebar|groups?", re.I)
+COLUMNS = {
+    "name": re.compile(r"名字|名称|^name$|bot", re.I),
+    "label": re.compile(r"标签|头衔|label|title", re.I),
+    "id": re.compile(r"^id$|agent.?id", re.I),
+    "duty": re.compile(r"只做|职责|做什么|duty|job|does", re.I),
+    "trigger": re.compile(r"触发|trigger|how", re.I),
+}
+
+
+def _table_for(text: str, heading: re.Pattern[str], exact: str):
+    """Rows of the table under ``exact`` heading, else under the first heading matching ``heading``."""
+    tables = roster_tables(text)
+    for wanted in (lambda h: h.strip() == exact, lambda h: bool(heading.search(h))):
+        for title, header, rows in tables:
+            if wanted(title) and rows:
+                return header, rows
+    raise BoxError(f"roster is missing a table under: {exact}")
+
+
 def load_roster(config: BoxConfig) -> tuple[list[dict], list[dict]]:
     text = read_roster(config)
-    bot_rows = extract_table_after(text, "## 一、名单")
-    group_rows = extract_table_after(text, "### 侧栏分组")
-
+    header, bot_rows = _table_for(text, BOTS_HEADING, "## 一、名单")
+    columns = {key: next((i for i, h in enumerate(header) if pattern.search(h)), None) for key, pattern in COLUMNS.items()}
+    # Positional fallback: name | label | id | duty | trigger.
+    for index, key in enumerate(("name", "label", "id", "duty", "trigger")):
+        if columns[key] is None and index < len(header) and index not in columns.values():
+            columns[key] = index
     bots: list[dict] = []
     for cells in bot_rows:
-        if len(cells) < 5:
+        cell = lambda key: cells[columns[key]] if columns[key] is not None and columns[key] < len(cells) else ""
+        if not cell("name") or not cell("id"):
             continue
-        bots.append(
-            {
-                "name": cells[0],
-                "label": cells[1],
-                "id": cells[2],
-                "duty": cells[3],
-                "trigger": cells[4],
-            }
-        )
+        bots.append({"name": cell("name"), "label": cell("label"), "id": cell("id"),
+                     "duty": cell("duty"), "trigger": cell("trigger")})
     if not bots:
         raise BoxError("no bots parsed from roster")
 
+    try:
+        _header, group_rows = _table_for(text, GROUPS_HEADING, "### 侧栏分组")
+    except BoxError:
+        group_rows = []
     groups: list[dict] = []
     group_of: dict[str, str] = {}
     for cells in group_rows:
@@ -365,6 +394,21 @@ def load_roster(config: BoxConfig) -> tuple[list[dict], list[dict]]:
     for bot in bots:
         bot["group"] = group_of.get(bot["name"], "")
     return bots, groups
+
+
+def load_bots(config: BoxConfig) -> tuple[list[dict], list[dict], str]:
+    """(bots, groups, where they came from). roster.md first; without it, every bot's profile.json."""
+    try:
+        bots, groups = load_roster(config)
+        return bots, groups, "roster"
+    except (OSError, PrivacyError, BoxError, UnicodeError, ValueError):
+        pass
+    profiles = read_profiles(config, {WILLOW_ID})
+    bots = [{"name": fields["name"], "label": fields.get("title", ""), "id": agent_id, "duty": "", "trigger": "", "group": ""}
+            for agent_id, fields in sorted(profiles.items(), key=lambda item: item[1]["name"].lower())]
+    if not bots:
+        raise BoxError("no roster.md and no agent profiles")
+    return bots, [], "profiles"
 
 
 def is_separator_line(line: str) -> bool:
@@ -547,8 +591,9 @@ def names_in_text(text: str, patterns: list[tuple[str, re.Pattern[str]]]) -> lis
     return found
 
 
-def is_willow(bot: dict) -> bool:
-    return bot.get("name") == WILLOW_NAME or str(bot.get("id") or "") == WILLOW_ID
+def is_willow(bot: dict, private: set[str] | frozenset = frozenset()) -> bool:
+    """A private bot: work metadata only. Willow Mage always; others when roster.md lists them."""
+    return bot.get("name") == WILLOW_NAME or str(bot.get("id") or "") == WILLOW_ID or bot.get("name") in private
 
 
 def _sqlite_ro_uri(path: Path) -> str:
@@ -699,22 +744,22 @@ def validate(payload: dict) -> None:
         raise BoxError("usage.note mismatch")
     if usage.get("estimate_label") != ESTIMATE_LABEL:
         raise BoxError("estimate label mismatch")
-    willow_rows = [bot for bot in payload["bots"] if bot.get("name") == WILLOW_NAME]
-    if len(willow_rows) > 1:
+    if len([bot for bot in payload["bots"] if bot.get("name") == WILLOW_NAME]) > 1:
         raise BoxError("Willow Mage listed twice")
-    willow = willow_rows[0] if willow_rows else {"status": "idle", "message_count": 0}
-    if willow.get("status") == "不监控" or willow.get("status") not in ("active", "recent", "idle"):
-        raise BoxError(f"Willow Mage status must follow her activity: {willow.get('status')!r}")
-    if willow.get("folder"):
-        raise BoxError("Willow Mage folder must not be recorded")
-    if willow.get("recent_tasks"):
-        raise BoxError("Willow Mage tasks must stay empty")
-    if willow.get("duty"):
-        raise BoxError("Willow Mage duty text must not be exposed")
-    if not isinstance(willow.get("message_count"), int) or willow["message_count"] < 0:
-        raise BoxError("Willow Mage message_count missing")
-    if willow.get("last_result") not in (None, "replied", "no-reply"):
-        raise BoxError(f"Willow Mage last_result invalid: {willow.get('last_result')!r}")
+    for willow in [bot for bot in payload["bots"] if bot.get("private")]:
+        who = willow.get("name")
+        if willow.get("status") == "不监控" or willow.get("status") not in ("active", "recent", "idle"):
+            raise BoxError(f"{who} status must follow activity: {willow.get('status')!r}")
+        if willow.get("folder"):
+            raise BoxError(f"{who} folder must not be recorded")
+        if willow.get("recent_tasks") or willow.get("logs") or willow.get("runs"):
+            raise BoxError(f"{who} tasks must stay empty")
+        if willow.get("duty"):
+            raise BoxError(f"{who} duty text must not be exposed")
+        if not isinstance(willow.get("message_count"), int) or willow["message_count"] < 0:
+            raise BoxError(f"{who} message_count missing")
+        if willow.get("last_result") not in (None, "replied", "no-reply"):
+            raise BoxError(f"{who} last_result invalid: {willow.get('last_result')!r}")
     for edge in payload["edges"]:
         if edge["kind"] not in ("mention", "dispatch"):
             raise BoxError(f"unexpected edge kind: {edge['kind']}")
@@ -780,26 +825,32 @@ def _names_in(cells: list[str], names: list[str]) -> list[str]:
     return hits
 
 
+EN_DAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+
+
 def _days(cells: list[str]) -> list[int] | None:
     text = " ".join(cells)
-    if "每天" in text or "每日" in text:
+    low = text.lower()
+    if "每天" in text or "每日" in text or re.search(r"\bdaily\b|every ?day", low):
         return None
-    if "工作日" in text:
+    if "工作日" in text or "weekday" in low:
         return [0, 1, 2, 3, 4]
-    if "周末" in text:
+    if "周末" in text or "weekend" in low:
         return [5, 6]
-    days = sorted({WEEKDAYS[ch] for ch in re.findall(r"(?:周|星期|礼拜)([一二三四五六日天])", text)})
-    return days or None
+    days = {WEEKDAYS[ch] for ch in re.findall(r"(?:周|星期|礼拜)([一二三四五六日天])", text)}
+    days |= {EN_DAYS[m] for m in re.findall(r"\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\b", low)}
+    return sorted(days) or None
 
 
 def parse_roster_extras(text: str, names: list[str]) -> dict:
     """Old names, folders, extra logs, push schedule, deleted bots and the change log."""
-    extras = {"aliases": {}, "folders": {}, "logs": {}, "schedule": [], "deleted": [], "changes": []}
+    extras = {"aliases": {}, "folders": {}, "logs": {}, "schedule": [], "deleted": [], "changes": [], "private": []}
     tables = roster_tables(text)
+    has = lambda heading, pattern: bool(re.search(pattern, heading, re.I))
     for heading, header, rows in tables:
-        if "旧名" in heading:
-            old_col = next((i for i, h in enumerate(header) if "旧" in h), 0)
-            new_col = next((i for i, h in enumerate(header) if "新" in h), len(header) - 1)
+        if has(heading, r"旧名|old names?|aliases"):
+            old_col = next((i for i, h in enumerate(header) if re.search(r"旧|old", h, re.I)), 0)
+            new_col = next((i for i, h in enumerate(header) if re.search(r"新|new|now", h, re.I)), len(header) - 1)
             for row in rows:
                 if len(row) <= max(old_col, new_col):
                     continue
@@ -813,13 +864,13 @@ def parse_roster_extras(text: str, names: list[str]) -> dict:
     known = names + list(extras["aliases"])
     canonical = lambda name: extras["aliases"].get(name, name)
     for heading, header, rows in tables:
-        if "/workspace" in heading or "共享电脑" in heading:
+        if has(heading, r"/workspace|共享电脑|folders?"):
             for row in rows:
                 bots = {canonical(name) for name in _names_in(row, known)}
                 slugs = [m.group(1) for cell in row for m in re.finditer(r"(?:/workspace/)?([a-z0-9][a-z0-9._\-]*)/", cell)]
                 if len(bots) == 1 and len(slugs) == 1:
                     extras["folders"].setdefault(bots.pop(), slugs[0])
-        if "日志" in heading and "时间" not in heading:
+        if has(heading, r"日志|\blogs?\b") and not has(heading, r"时间|schedule"):
             for row in rows:
                 bots = [canonical(name) for name in _names_in(row[:1] or row, known)] or [canonical(n) for n in _names_in(row, known)]
                 files = [m.group(0) for cell in row for m in MD_RE.finditer(cell)]
@@ -828,34 +879,45 @@ def parse_roster_extras(text: str, names: list[str]) -> dict:
                     for name in files:
                         if name not in extras["logs"][bots[0]]:
                             extras["logs"][bots[0]].append(name)
-        if "推送时间" in heading or "时间表" in heading:
+        if has(heading, r"推送时间|时间表|schedule"):
             for row in rows:
                 hit = next((TIME_RE.search(cell) for cell in row if TIME_RE.search(cell)), None)
                 bots = [canonical(name) for name in _names_in(row, known)]
                 if not hit or not bots:
                     continue
                 rest = [cell for cell in row if cell and not TIME_RE.search(cell) and not _names_in([cell], known)]
+                when = next((cell for cell in row if TIME_RE.search(cell)), "")
                 extras["schedule"].append({
                     "bot": bots[0], "time": f"{int(hit.group(1)):02d}:{hit.group(2)}", "days": _days(row),
-                    "what": max(rest, key=len)[:40] if rest else "",
+                    "what": max(rest, key=len)[:40] if rest else "", "when": when[:24],
                 })
-        if "已删除" in heading:
+        if has(heading, r"已删除|deleted"):
             extras["deleted"] = [row[0] for row in rows if row and row[0]][:20]
-        if "改动记录" in heading:
+        if has(heading, r"改动记录|change ?log|changes"):
             for row in rows:
                 date = next((DATE_RE.search(cell).group(0) for cell in row if DATE_RE.search(cell)), "")
                 text_cells = [cell for cell in row if cell and not DATE_RE.fullmatch(cell)]
                 if text_cells:
                     extras["changes"].append({"date": date, "text": " · ".join(text_cells)[:100]})
+        # Bots whose work shows but whose words never do (like Willow Mage): see the template.
+        if has(heading, r"隐私|privacy"):
+            for row in rows:
+                for name in _names_in(row[:1], known):
+                    if canonical(name) not in extras["private"]:
+                        extras["private"].append(canonical(name))
     extras["changes"] = sorted(extras["changes"], key=lambda item: item["date"], reverse=True)[:10]
     return extras
+
+
+def empty_extras() -> dict:
+    return {"aliases": {}, "folders": {}, "logs": {}, "schedule": [], "deleted": [], "changes": [], "private": []}
 
 
 def load_extras(config: BoxConfig, names: list[str]) -> dict:
     try:
         return parse_roster_extras(read_roster(config), names)
     except (OSError, PrivacyError, ValueError):
-        return {"aliases": {}, "folders": {}, "logs": {}, "schedule": [], "deleted": [], "changes": []}
+        return empty_extras()
 
 
 def resolve_folders(config: BoxConfig, bots: list[dict], extras: dict) -> dict[str, Path]:
@@ -865,9 +927,12 @@ def resolve_folders(config: BoxConfig, bots: list[dict], extras: dict) -> dict[s
     (and the logs the roster names for them) to ``read_log``.
     """
     workspace = config.workspace
+    private = set(extras.get("private", []))
     found: dict[str, Path] = {}
     for bot in bots:
         name = bot["name"]
+        if is_willow(bot, private):
+            continue  # a private bot's folder is never opened
         candidates = [config.folder_map.get(name)]
         if extras["folders"].get(name):
             candidates.append(workspace / extras["folders"][name])
@@ -902,7 +967,7 @@ def find_dispatcher(config: BoxConfig, bots: list[dict]) -> tuple[str, Path]:
     """Whoever keeps dispatch-log.md in their folder dispatches; otherwise the platform's lead bot."""
     for bot in bots:
         folder = config.resolved_folders.get(bot["name"])
-        if folder is not None and (folder / "dispatch-log.md").is_file() and not is_willow(bot):
+        if folder is not None and (folder / "dispatch-log.md").is_file() and not is_willow(bot):  # never a private bot's folder
             return bot["name"], folder / "dispatch-log.md"
     return DEFAULT_DISPATCHER, config.dispatch_log
 
@@ -1049,9 +1114,10 @@ def build(config: BoxConfig | None = None) -> dict:
     config = config if config is not None else default_config()
     now = datetime.now().astimezone()
     today = now.date()
-    roster, groups = load_roster(config)
+    roster, groups, roster_source = load_bots(config)
     roster_names = [bot["name"] for bot in roster]
-    extras = load_extras(config, roster_names)
+    extras = load_extras(config, roster_names) if roster_source == "roster" else empty_extras()
+    private = set(extras["private"])
     aliases = extras["aliases"]
     folders = resolve_folders(config, roster, extras)
     dispatcher, dispatch_path = find_dispatcher(config, roster)
@@ -1060,9 +1126,8 @@ def build(config: BoxConfig | None = None) -> dict:
     patterns = compile_name_patterns(roster_names + list(aliases))
     willow_ids = {WILLOW_ID}
     for bot in roster:
-        if is_willow(bot) and bot.get("id"):
+        if is_willow(bot, private) and bot.get("id"):
             willow_ids.add(str(bot["id"]))
-    willow_meta = willow_index_meta(config, willow_ids)
 
     edges: Counter[tuple[str, str, str]] = Counter()
     bots_out: list[dict] = []
@@ -1070,7 +1135,9 @@ def build(config: BoxConfig | None = None) -> dict:
 
     for bot in roster:
         name = bot["name"]
-        if is_willow(bot):
+        if is_willow(bot, private):
+            ids = {str(bot.get("id") or "")} | ({WILLOW_ID} if bot.get("name") == WILLOW_NAME else set())
+            willow_meta = willow_index_meta(config, ids)
             newest_ms = willow_meta["newest_ms"]
             newest = None if newest_ms is None else newest_ms / 1000.0
             record = {
@@ -1090,6 +1157,7 @@ def build(config: BoxConfig | None = None) -> dict:
                 "recent_tasks": [],
                 "message_count": willow_meta["message_count"],
                 "last_result": willow_meta["last_result"],
+                "private": True,
             }
             bots_out.append(record)
             measured.append(record)
@@ -1246,6 +1314,7 @@ def build(config: BoxConfig | None = None) -> dict:
         "deleted": extras["deleted"],
         "changes": extras["changes"],
         "aliases": len(aliases),
+        "roster_source": roster_source,
         "summary": {
             "text": summary_text,
             "active": counts.get("active", 0),
@@ -1268,3 +1337,88 @@ def build(config: BoxConfig | None = None) -> dict:
     }
     validate(payload)
     return payload
+
+
+# ---------------------------------------------------------------- roster draft
+# A starting roster.md built from what the box already has (profiles, folders, logs and any
+# existing roster). Bot Office only hands it out; it never writes into /workspace. Same layout
+# as box/roster.template.md, so the parser above reads it back.
+
+DRAFT = {
+    "zh": {
+        "title": "# Bot 名册（/workspace/roster.md）",
+        "intro": "> 由Bot协作室根据这台电脑上已有的文件生成的草稿。请把标了“待填写”的地方补上，再放到 /workspace/roster.md。",
+        "bots": "## 一、名单", "bots_head": "| 名字 | 标签 | id | 只做的一件事 | 怎么触发 |",
+        "groups": "### 侧栏分组", "groups_head": "| 分组 | 成员 |", "groups_row": "| （分组名，待填写） | （成员，用、分隔） |",
+        "aliases": "### 旧名对照", "aliases_head": "| 旧名 | 新名 |", "aliases_row": "| （以前的名字，没有就删掉这行） | （现在的名字） |",
+        "folders": "### 共享电脑 /workspace", "folders_head": "| 文件夹 | 谁的 | 放什么 |",
+        "logs": "### 各 bot 的日志", "logs_head": "| bot | 日志 |",
+        "schedule": "## 推送时间表（本地时间）", "schedule_head": "| 时间 | bot | 推什么 |", "schedule_row": "| （例如 每天 07:30，待填写） | （bot） | （推什么） |",
+        "privacy": "## Bot协作室隐私", "privacy_note": "> 列在这里的 bot 只显示工作信息（在不在忙、最近时间、条数、交接有没有回音），它们写的和收到的内容一律不显示。",
+        "privacy_head": "| bot | 规则 |", "privacy_rule": "只显示工作信息", "privacy_row": "| （没有就删掉这行） | 只显示工作信息 |",
+        "changes": "## 改动记录", "changes_head": "| 日期 | 改了什么 |", "changes_row": "用Bot协作室生成名册草稿",
+        "todo": "待填写",
+    },
+    "en": {
+        "title": "# Bot roster (/workspace/roster.md)",
+        "intro": "> A draft Bot Office generated from files already on this box. Fill in the places marked TODO, then save it as /workspace/roster.md.",
+        "bots": "## Bots", "bots_head": "| Name | Label | id | The one thing it does | Trigger |",
+        "groups": "### Sidebar groups", "groups_head": "| Group | Members |", "groups_row": "| (group name, TODO) | (members, comma-separated) |",
+        "aliases": "### Old names", "aliases_head": "| Old name | New name |", "aliases_row": "| (an earlier name; delete this row if none) | (current name) |",
+        "folders": "### Folders in /workspace", "folders_head": "| Folder | Owner | What's in it |",
+        "logs": "### Logs", "logs_head": "| Bot | Logs |",
+        "schedule": "## Push schedule (local time)", "schedule_head": "| Time | Bot | What |", "schedule_row": "| (e.g. daily 07:30, TODO) | (bot) | (what it sends) |",
+        "privacy": "## Bot Office privacy", "privacy_note": "> Bots listed here show work only (busy or not, last active, counts, whether handoffs were answered). What they write or receive is never shown.",
+        "privacy_head": "| Bot | Rule |", "privacy_rule": "work only", "privacy_row": "| (delete this row if none) | work only |",
+        "changes": "## Change log", "changes_head": "| Date | What changed |", "changes_row": "Roster draft generated by Bot Office",
+        "todo": "TODO",
+    },
+}
+
+
+def _cell(text) -> str:
+    return " ".join(str(text or "").replace("|", "/").split())
+
+
+def roster_draft(config: BoxConfig | None = None, language: str = "zh") -> str:
+    """A roster.md draft: existing roster rows first, then every bot found in profile.json."""
+    config = config if config is not None else default_config()
+    words = DRAFT["en" if language == "en" else "zh"]
+    try:
+        bots, groups, source = load_bots(config)
+    except BoxError:
+        bots, groups, source = [], [], "none"
+    profiles = read_profiles(config, {WILLOW_ID})
+    known_ids = {str(bot.get("id")) for bot in bots}
+    for agent_id, fields in sorted(profiles.items(), key=lambda item: item[1]["name"].lower()):
+        if agent_id not in known_ids:
+            bots.append({"name": fields["name"], "label": fields.get("title", ""), "id": agent_id, "duty": "", "trigger": "", "group": ""})
+    extras = load_extras(config, [bot["name"] for bot in bots]) if source == "roster" else empty_extras()
+    private = set(extras["private"]) | {bot["name"] for bot in bots if is_willow(bot)}
+    folders = resolve_folders(config, bots, extras)
+
+    out = [words["title"], "", words["intro"], "", words["bots"], "", words["bots_head"], "| --- | --- | --- | --- | --- |"]
+    for bot in bots:
+        duty = "" if bot["name"] in private else (bot.get("duty") or words["todo"])
+        out.append(f"| {_cell(bot['name'])} | {_cell(bot.get('label'))} | {_cell(bot.get('id'))} | {_cell(duty)} | {_cell(bot.get('trigger') or words['todo'])} |")
+    out += ["", words["groups"], words["groups_head"], "| --- | --- |"]
+    joiner = ", " if language == "en" else "、"
+    out += [f"| {_cell(group['name'])} | {joiner.join(_cell(m) for m in group['members'])} |" for group in groups] or [words["groups_row"]]
+    out += ["", words["aliases"], words["aliases_head"], "| --- | --- |"]
+    out += [f"| {_cell(old)} | {_cell(new)} |" for old, new in extras["aliases"].items()] or [words["aliases_row"]]
+    out += ["", words["folders"], words["folders_head"], "| --- | --- | --- |"]
+    out += [f"| `/workspace/{os.path.relpath(folder, config.workspace)}/` | {_cell(name)} |  |" for name, folder in folders.items()]
+    out += ["", words["logs"], words["logs_head"], "| --- | --- |"]
+    for name, folder in folders.items():
+        logs = [path.name for path in bot_log_paths(folder, config)]
+        if logs:
+            out.append(f"| {_cell(name)} | {joiner.join(logs)} |")
+    out += ["", words["schedule"], "", words["schedule_head"], "| --- | --- | --- |"]
+    out += [f"| {_cell(item.get('when') or item['time'])} | {_cell(item['bot'])} | {_cell(item['what'])} |"
+            for item in extras["schedule"]] or [words["schedule_row"]]
+    out += ["", words["privacy"], "", words["privacy_note"], "", words["privacy_head"], "| --- | --- |"]
+    out += [f"| {_cell(name)} | {words['privacy_rule']} |" for name in sorted(private)] or [words["privacy_row"]]
+    today = datetime.now().strftime("%Y-%m-%d")
+    out += ["", words["changes"], "", words["changes_head"], "| --- | --- |", f"| {today} | {words['changes_row']} |"]
+    out += [f"| {item['date']} | {_cell(item['text'])} |" for item in extras["changes"]]
+    return "\n".join(out) + "\n"

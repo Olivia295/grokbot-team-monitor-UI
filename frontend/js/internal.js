@@ -134,10 +134,11 @@ function formatGenerated(iso, zone) {
 }
 
 function tasksCell(bot) {
-  if (bot.name === "Willow Mage") {
+  if (bot.private || bot.name === "Willow Mage") {
     const result = bot.last_result === "replied" ? t("handoff.replied")
       : bot.last_result === "no-reply" ? t("handoff.noreply") : "—";
-    return `<span class="muted">${esc(t("willow.count", { n: bot.message_count ?? 0 }))} · ${esc(result)} · ${esc(t("willow.hidden"))}</span>`;
+    const hidden = bot.name === "Willow Mage" ? t("willow.hidden") : t("private.hidden");
+    return `<span class="muted">${esc(t("willow.count", { n: bot.message_count ?? 0 }))} · ${esc(result)} · ${esc(hidden)}</span>`;
   }
   if (bot.status === "不监控" || bot.status === "no-folder") return '<span class="muted">—</span>';
   const runs = bot.runs
@@ -180,6 +181,15 @@ function changesCard(data) {
   </article>`;
 }
 
+// Without roster.md the panel still works from each bot's profile.json; offer a draft to start one.
+function rosterCard(data) {
+  const missing = data.roster_source === "profiles";
+  const link = `<a class="small-btn" href="api/roster-draft?lang=${S.lang === "en" ? "en" : "zh"}" download="roster.md">${esc(t("internal.roster.download"))}</a>`;
+  const how = `<a class="small-btn" href="https://github.com/Olivia295/grokbot-teamwork-UI/blob/main/box/README.md" target="_blank" rel="noopener">${esc(t("internal.roster.how"))}</a>`;
+  if (!missing) return `<div class="roster-tools">${link}</div>`;
+  return `<div class="quota-banner roster-banner"><span class="quota-mark" aria-hidden="true">i</span><span>${esc(t("internal.roster.missing"))}</span>${link}${how}</div>`;
+}
+
 function settingsWarning(data) {
   if (!data.settingsInWorkspace) return "";
   return `<div class="quota-banner"><span class="quota-mark" aria-hidden="true">!</span><span>${esc(t("internal.settingsWarning"))}</span></div>`;
@@ -214,7 +224,7 @@ function tableCard(data) {
     const quiet = bot.status === "不监控";
     const last = quiet || !bot.last_activity ? "—" : String(bot.last_activity).replace("T", " ").slice(0, 16);
     const files = quiet ? "—" : String(bot.files_modified_7d ?? 0);
-    const dutyTip = bot.name === "Willow Mage" || !bot.duty ? "" : ` title="${esc(bot.duty)}"`;
+    const dutyTip = bot.private || bot.name === "Willow Mage" || !bot.duty ? "" : ` title="${esc(bot.duty)}"`;
     return `<tr>
       <td class="name"${dutyTip}>${esc(bot.name)}</td>
       <td>${esc(bot.label || "—")}${bot.engine ? ` <span class="engine-tag">${esc(bot.engine)}</span>` : ""}</td>
@@ -310,8 +320,8 @@ function renderInternal() {
     return;
   }
   if (stamp) stamp.textContent = formatGenerated(S.internal.generated_at, S.internal.timezone);
-  body.innerHTML = settingsWarning(S.internal) + summaryCard(S.internal) + tableCard(S.internal)
-    + `<div class="internal-split">${scheduleCard(S.internal)}${changesCard(S.internal)}</div>`
+  body.innerHTML = settingsWarning(S.internal) + rosterCard(S.internal) + summaryCard(S.internal) + tableCard(S.internal)
+    + ((extra) => extra ? `<div class="internal-split">${extra}</div>` : "")(scheduleCard(S.internal) + changesCard(S.internal))
     + `<div class="internal-split">${edgesCard(S.internal)}${usageCard(S.internal)}</div>`;
 }
 

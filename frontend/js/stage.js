@@ -703,7 +703,7 @@ const visits = new Map();
 
 function speakLine(text, from) {
   if (text === "•••") return "•••";
-  if (isWillowPlaceholder(text)) return t("willow.hidden");
+  if (isWillowPlaceholder(text)) return masked(text);
   let clean = String(text || "").replace(/^[^：:\s]{1,24}[：:]\s*/, "");
   const name = from ? nameOf(from) : "";
   for (let i = 0; i < 2 && name && clean.startsWith(name); i++) clean = clean.slice(name.length).replace(/^[\s：:，,]+/, "");

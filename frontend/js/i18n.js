@@ -18,7 +18,7 @@ const I18N = {
     "banner.demo": "正在显示演示数据。", "banner.demoAuto": "没找到本机的 Grok Bot 数据，先用演示团队给你看看效果。", "banner.privacy": "隐私模式已开：所有消息内容都被隐藏。", "banner.settings": "去设置 →",
     "foot.updated": "只读本机数据 · {time} 更新", "foot.settings": "设置",
     "internal.title": "本机工作状态", "internal.summary.zh": "", "internal.generated": "生成于 {time}", "internal.summary": "自动摘要",
-    "internal.privacy": "只读本机文件夹。不读 Notion 的 inbox / snapshots / raw，不读密钥、周记和日记。Willow Mage 只显示工作状态、最近时间和交接是否完成，不显示内容。",
+    "internal.privacy": "只读本机文件夹。不读任何 inbox / snapshots / raw 文件夹、密钥类文件、周记和日记。私密 bot（Willow Mage 和名册里列出的）只显示工作状态、最近时间和交接是否完成，不显示内容。",
     "internal.col.name": "名字", "internal.col.label": "标签", "internal.col.group": "分组", "internal.col.status": "状态",
     "internal.col.last": "最近活跃", "internal.col.files": "7天改动", "internal.col.tasks": "最近任务",
     "internal.status.active": "活跃", "internal.status.recent": "近期", "internal.status.idle": "空闲",
@@ -146,7 +146,7 @@ const I18N = {
     "foot.updated": "Read-only local data · updated {time}", "foot.settings": "Settings",
     "internal.title": "On this box", "internal.generated": "Generated {time}", "internal.summary": "Auto summary",
     "internal.summary.zh": "This summary is generated in Chinese.",
-    "internal.privacy": "Read-only. Skips Notion inbox, snapshots and raw, plus secrets, weekly notes and diaries. Willow Mage shows work status, last active time and whether a handoff was answered; her content stays hidden.",
+    "internal.privacy": "Read-only. Skips every inbox, snapshots and raw folder, credential files, weekly notes and diaries. Private bots (Willow Mage and any the roster lists) show work status, last active time and whether a handoff was answered; their content stays hidden.",
     "internal.col.name": "Name", "internal.col.label": "Label", "internal.col.group": "Group", "internal.col.status": "Status",
     "internal.col.last": "Last active", "internal.col.files": "Files, 7d", "internal.col.tasks": "Recent tasks",
     "internal.status.active": "Active", "internal.status.recent": "Recent", "internal.status.idle": "Idle",
@@ -377,4 +377,16 @@ Object.assign(I18N.en, {
   "internal.sched.done": "Sent", "internal.sched.waiting": "Waiting", "internal.sched.upcoming": "Later today", "internal.sched.missed": "Missed", "internal.sched.not-today": "Not today",
   "internal.changes.title": "Team change log", "internal.deleted": "Deleted: {names}",
   "internal.settingsWarning": "Bot Office's settings file is inside /workspace, where every bot can read its webhook URLs and secrets. Move it out with GROK_COLLAB_SETTINGS=~/.config/bot-office/settings.json.",
+});
+Object.assign(I18N.zh, {
+  "private.hidden": "（私密内容不显示）",
+  "box.noRoster": "这台电脑上还没有 roster.md，bot 信息来自各 bot 的设置文件。往下翻到「本机工作状态」可以下载一份名册草稿。",
+  "internal.roster.missing": "没找到 /workspace/roster.md：现在的名字、头衔和头像来自各 bot 的 profile.json，还没有分组、推送时间表和私密设置。下载草稿补全后放进 /workspace，就能用上这些功能。",
+  "internal.roster.download": "下载名册草稿", "internal.roster.how": "怎么生成名册",
+});
+Object.assign(I18N.en, {
+  "private.hidden": "(private content hidden)",
+  "box.noRoster": "No roster.md on this box yet, so bot details come from each bot's profile. Scroll to \"On this box\" to download a roster draft.",
+  "internal.roster.missing": "No /workspace/roster.md: names, titles and avatars come from each bot's profile.json, with no groups, push schedule or privacy settings yet. Download the draft, fill it in and save it to /workspace to turn those on.",
+  "internal.roster.download": "Download roster draft", "internal.roster.how": "How to make a roster",
 });
