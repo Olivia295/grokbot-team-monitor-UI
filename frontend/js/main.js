@@ -1,17 +1,40 @@
 // Dashboard: data polling and wiring.
 
+function paintSource() {
+  const pill = $("#connection");
+  const banner = $("#banner");
+  const source = S.office.source || {};
+  if (source.demo) {
+    pill.dataset.status = "demo";
+    pill.textContent = t("pill.demo");
+    banner.hidden = false;
+    banner.innerHTML = `${esc(t(S.settings.dataSource === "demo" ? "banner.demo" : "banner.demoAuto"))} <a href="/settings#data">${t("banner.settings")}</a>`;
+    return;
+  }
+  if (source.box) {
+    pill.dataset.status = "ok";
+    pill.textContent = t("pill.box");
+    if (source.empty) {
+      banner.hidden = false;
+      banner.textContent = t("box.empty");
+    } else if (S.office.privacy) {
+      banner.hidden = false;
+      banner.innerHTML = `${esc(t("banner.privacy"))} <a href="/settings">${t("banner.settings")}</a>`;
+    } else {
+      banner.hidden = true;
+      banner.textContent = "";
+    }
+    return;
+  }
+  pill.dataset.status = S.office.appOnline ? "ok" : "offline";
+  pill.textContent = S.office.appOnline ? t("pill.online") : t("pill.offline");
+  banner.hidden = !S.office.privacy;
+  banner.innerHTML = S.office.privacy ? `${esc(t("banner.privacy"))} <a href="/settings">${t("banner.settings")}</a>` : "";
+}
 async function refreshOffice() {
   try {
-    S.office = await getJson("/api/office");
-    const pill = $("#connection");
-    const source = S.office.source;
-    pill.dataset.status = source.demo ? "demo" : S.office.appOnline ? "ok" : "offline";
-    pill.textContent = source.demo ? t("pill.demo") : S.office.appOnline ? t("pill.online") : t("pill.offline");
-    const banner = $("#banner");
-    banner.hidden = !source.demo && !S.office.privacy;
-    banner.innerHTML = source.demo
-      ? `${esc(t(S.settings.dataSource === "demo" ? "banner.demo" : "banner.demoAuto"))} <a href="/settings#data">${t("banner.settings")}</a>`
-      : S.office.privacy ? `${esc(t("banner.privacy"))} <a href="/settings">${t("banner.settings")}</a>` : "";
+    S.office = await getJson(withBox("/api/office"));
+    paintSource();
     renderStage();
     renderHero();
     renderRoster();
@@ -25,7 +48,7 @@ async function refreshOffice() {
 async function refreshFlows() {
   try {
     const hours = S.hours;
-    const data = await getJson(`/api/flows?hours=${hours}`);
+    const data = await getJson(withBox(`/api/flows?hours=${hours}`));
     if (hours !== S.hours) return;
     const fresh = newSteps(data);
     S.flows = data;
@@ -43,7 +66,7 @@ async function refreshFlows() {
 async function refreshInsights() {
   try {
     const first = !S.insights;
-    S.insights = await getJson("/api/insights");
+    S.insights = await getJson(withBox("/api/insights"));
     renderHero();
     renderAwards();
     renderFeed();

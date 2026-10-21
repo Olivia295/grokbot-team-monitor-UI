@@ -80,6 +80,8 @@ Bot协作室会自动在这些位置找 Grok Bot 的数据：
 
 本机读取只有在 `/workspace/roster.md` 和目录 `/home/box/agent-data` 都在时才能用，否则该选项禁用。`BOT_OFFICE_INTERNAL=1` 强制打开，`=0` 强制关闭。检测得到本机环境时，默认用本机读取。Willow Mage 只显示「不监控」；不读 Notion 的 `inbox` / `snapshots` / `raw`，不读密钥、周记和日记。
 
+本机模式下，工作室、关系网、时间线和洞察改读本机真实记录（名册、`search-index.db` 里的消息、`dispatch-log.md` 的分派），没有 Grok Bot 应用缓存时也不会退回演示团队。没有协作记录时页面显示「本机暂无协作记录」。演示徽标只在数据确实是演示团队时出现。Willow Mage 的消息不会进入这些视图；你自己的消息只保留时间和对象，不显示正文。
+
 ## 功能
 
 ### 工作室：bot 在办公室里干活

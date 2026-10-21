@@ -20,14 +20,18 @@ function syncModeChrome() {
   const external = document.getElementById("mode-external");
   const note = document.getElementById("mode-note");
   if (!internal || !external || !S.modeInfo) return;
-  const available = !!S.modeInfo.internal_available;
+  const available = !!S.modeInfo.internal_available && !S.modeRequestFailed;
   const on = S.dataMode === "internal" && available;
   if (!available) S.dataMode = "external";
   internal.disabled = !available;
   external.disabled = false;
   internal.setAttribute("aria-pressed", String(on));
   external.setAttribute("aria-pressed", String(!on));
-  if (!available) {
+  if (S.modeRequestFailed) {
+    note.hidden = false;
+    note.innerHTML = `${esc(t("request.failed"))} <button type="button" class="retry" id="mode-retry">${esc(t("request.retry"))}</button>`;
+    internal.setAttribute("aria-describedby", "mode-note");
+  } else if (!available) {
     note.hidden = false;
     note.textContent = t("mode.unavailable");
     internal.setAttribute("aria-describedby", "mode-note");
@@ -40,11 +44,23 @@ function syncModeChrome() {
   if (panel) panel.hidden = S.dataMode !== "internal";
 }
 
+function reloadOfficeViews() {
+  if (typeof refreshOffice !== "function") return Promise.resolve();
+  return refreshOffice().then(() => Promise.all([
+    typeof refreshFlows === "function" ? refreshFlows() : null,
+    typeof refreshInsights === "function" ? refreshInsights() : null,
+  ]));
+}
+
 function bindModeSwitch() {
   const root = document.getElementById("mode-switch");
   if (!root || root.dataset.bound) return;
   root.dataset.bound = "1";
   root.addEventListener("click", (event) => {
+    if (event.target.closest("#mode-retry")) {
+      initDataMode().then(() => reloadOfficeViews());
+      return;
+    }
     const button = event.target.closest("[data-mode]");
     if (!button || button.disabled) return;
     setDataMode(button.dataset.mode);
@@ -52,25 +68,34 @@ function bindModeSwitch() {
 }
 
 function setDataMode(mode, persist = true) {
-  if (!S.modeInfo) return;
+  if (!S.modeInfo || S.modeRequestFailed) return;
   if (mode !== "internal" && mode !== "external") return;
   if (mode === "internal" && !S.modeInfo.internal_available) return;
   const changed = S.dataMode !== mode;
   S.dataMode = mode;
   if (persist) writeStoredMode(mode);
   syncModeChrome();
+  if (changed) reloadOfficeViews();
   if (mode === "internal" && (changed || !S.internal)) refreshInternal();
   else renderInternal();
 }
 
 async function initDataMode() {
   bindModeSwitch();
-  try {
-    S.modeInfo = await getJson("/api/mode");
-  } catch {
-    S.modeInfo = { internal_available: false, reason: "" };
+  const result = await fetchJson("/api/mode");
+  if (result.failed) {
+    S.modeRequestFailed = true;
+    S.modeInfo = { internal_available: false, reason: "", requestFailed: true };
+    S.dataMode = "external";
+  } else if (result.unavailable) {
+    S.modeRequestFailed = false;
+    S.modeInfo = { internal_available: false, reason: (result.data && (result.data.reason || result.data.error)) || "" };
+    S.dataMode = "external";
+  } else {
+    S.modeRequestFailed = false;
+    S.modeInfo = result.data || { internal_available: false, reason: "" };
+    S.dataMode = chooseMode(!!S.modeInfo.internal_available);
   }
-  S.dataMode = chooseMode(!!S.modeInfo.internal_available);
   syncModeChrome();
 }
 
@@ -214,9 +239,14 @@ function renderInternal() {
   if (S.dataMode !== "internal") return;
   const body = $("#internal-body");
   const stamp = $("#internal-stamp");
+  if (S.internalRequestFailed) {
+    if (stamp) stamp.textContent = "";
+    body.innerHTML = `<p class="muted">${esc(t("request.failed"))} <button type="button" class="retry" id="internal-retry">${esc(t("request.retry"))}</button></p>`;
+    return;
+  }
   if (S.internalError) {
     if (stamp) stamp.textContent = "";
-    body.innerHTML = `<p class="muted">${esc(t("internal.error"))}</p>`;
+    body.innerHTML = `<p class="muted">${esc(t("internal.error"))} <button type="button" class="retry" id="internal-retry">${esc(t("request.retry"))}</button></p>`;
     return;
   }
   if (!S.internal) {
@@ -239,16 +269,31 @@ async function refreshInternal() {
     S.internalError = false;
     renderInternal();
   }
-  try {
-    const data = await getJson("/api/internal");
-    if (gen !== internalGen || S.dataMode !== "internal") return;
-    S.internal = data;
+  const result = await fetchJson("/api/internal");
+  if (gen !== internalGen || S.dataMode !== "internal") return;
+  if (result.unavailable) {
+    S.internalRequestFailed = false;
     S.internalError = false;
-  } catch {
-    if (gen !== internalGen || S.dataMode !== "internal") return;
+    S.modeInfo = { ...(S.modeInfo || {}), internal_available: false, reason: (result.data && result.data.error) || "" };
+    S.dataMode = "external";
+    syncModeChrome();
+    renderInternal();
+    reloadOfficeViews();
+    return;
+  }
+  if (result.failed) {
+    S.internalRequestFailed = true;
     if (!S.internal) S.internalError = true;
+  } else {
+    S.internal = result.data;
+    S.internalError = false;
+    S.internalRequestFailed = false;
   }
   renderInternal();
 }
+
+document.addEventListener("click", (event) => {
+  if (event.target.closest("#internal-retry")) refreshInternal();
+});
 
 bindModeSwitch();

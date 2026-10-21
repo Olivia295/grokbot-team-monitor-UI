@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import time
 
+from backend.box_source import load_box_cache
 from backend.collab import flows_from, office_from
 from backend.demo import demo_cache
 from backend.grok_cache import Cache, default_support_dir, load_cache
@@ -23,7 +24,10 @@ def _now() -> int:
     return int(time.time() * 1000)
 
 
-def resolve_cache(settings: dict, now_ms: int) -> Cache:
+def resolve_cache(settings: dict, now_ms: int, box: bool = False) -> Cache:
+    # Internal mode reads the box. It never substitutes the built-in demo team.
+    if box:
+        return load_box_cache()
     source = "demo" if os.environ.get("GROK_COLLAB_DEMO") == "1" else settings.get("dataSource", "auto")
     language = "en" if settings.get("language") == "en" else "zh"
     if source == "demo":
@@ -35,17 +39,23 @@ def resolve_cache(settings: dict, now_ms: int) -> Cache:
 
 
 def _source(cache: Cache) -> dict:
-    return {"demo": cache.demo, "supportDir": "" if cache.demo else str(cache.support), "found": bool(cache.roster)}
+    return {
+        "demo": bool(cache.demo),
+        "box": bool(cache.box),
+        "empty": bool(cache.box and cache.empty),
+        "supportDir": "" if cache.demo else str(cache.support),
+        "found": bool(cache.roster),
+    }
 
 
 def _bot(settings: dict, bot_id: str) -> dict:
     return settings.get("bots", {}).get(bot_id, {})
 
 
-def office_view(settings: dict | None = None, now_ms: int | None = None) -> dict:
+def office_view(settings: dict | None = None, now_ms: int | None = None, box: bool = False) -> dict:
     settings = settings or load_settings()
     now_ms = now_ms or _now()
-    cache = resolve_cache(settings, now_ms)
+    cache = resolve_cache(settings, now_ms, box=box)
     office = office_from(cache, now_ms)
     rooms = settings.get("rooms", {})
     hidden_rooms = {room_id for room_id, room in rooms.items() if room.get("hidden")}
@@ -80,10 +90,10 @@ def office_view(settings: dict | None = None, now_ms: int | None = None) -> dict
             "source": _source(cache), "privacy": bool(settings.get("privacy"))}
 
 
-def flows_view(hours: int, settings: dict | None = None, now_ms: int | None = None) -> dict:
+def flows_view(hours: int, settings: dict | None = None, now_ms: int | None = None, box: bool = False) -> dict:
     settings = settings or load_settings()
     now_ms = now_ms or _now()
-    cache = resolve_cache(settings, now_ms)
+    cache = resolve_cache(settings, now_ms, box=box)
     data = flows_from(cache, now_ms, hours)
     names = {row["id"]: row.get("name") or "" for row in cache.roster}
     # Bots hidden from the office still take part in flows; show them under their alias.
@@ -105,10 +115,10 @@ def flows_view(hours: int, settings: dict | None = None, now_ms: int | None = No
     return data
 
 
-def insights_view(settings: dict | None = None, now_ms: int | None = None) -> dict:
+def insights_view(settings: dict | None = None, now_ms: int | None = None, box: bool = False) -> dict:
     settings = settings or load_settings()
     now_ms = now_ms or _now()
-    cache = resolve_cache(settings, now_ms)
+    cache = resolve_cache(settings, now_ms, box=box)
     data = insights_from(cache, now_ms)
     hidden = {bot_id for bot_id, bot in settings.get("bots", {}).items() if bot.get("hidden")}
     for profile in data["profiles"]:

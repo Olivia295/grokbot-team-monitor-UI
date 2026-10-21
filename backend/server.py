@@ -56,7 +56,8 @@ class Handler(BaseHTTPRequestHandler):
             hostname = urlsplit("//" + host).hostname
         except ValueError:
             return False
-        return hostname in {"127.0.0.1", "localhost", "::1"} and (not origin or origin == "http://" + host)
+        extra = {h.strip() for h in os.environ.get("BOT_OFFICE_ALLOWED_HOSTS", "").split(",") if h.strip()}
+        return hostname in {"127.0.0.1", "localhost", "::1"} | extra and (not origin or origin == "http://" + host)
 
     def do_GET(self) -> None:
         url = urlsplit(self.path)
@@ -68,17 +69,18 @@ class Handler(BaseHTTPRequestHandler):
             if not self._local():
                 self._json({"error": "请从本机打开Bot协作室。"}, status=403)
                 return
+            query = parse_qs(url.query, max_num_fields=8)
+            box = (query.get("box") or ["0"])[0] == "1"
             if path == "/api/office":
-                self._json(office_view())
+                self._json(office_view(box=box))
             elif path == "/api/insights":
-                self._json(insights_view())
+                self._json(insights_view(box=box))
             elif path == "/api/flows":
-                query = parse_qs(url.query, max_num_fields=4)
                 try:
                     hours = int(query.get("hours", ["24"])[0])
                 except ValueError:
                     hours = 24
-                self._json(flows_view(hours if hours in WINDOWS else 24))
+                self._json(flows_view(hours if hours in WINDOWS else 24, box=box))
             elif path == "/api/settings":
                 self._json(load_settings())
             elif path == "/api/mode":

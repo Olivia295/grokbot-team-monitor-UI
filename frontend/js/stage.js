@@ -996,7 +996,8 @@ function tickAmbient(now) {
 
 function renderStage() {
   if (!S.office) return;
-  $("#stage-hint").textContent = S.replay ? "" : t(`hint.${S.view}`);
+  const boxEmpty = S.office.source?.box && S.office.source.empty;
+  $("#stage-hint").textContent = S.replay ? "" : boxEmpty ? t("box.empty") : t(`hint.${S.view}`);
   if (S.view === "studio") renderStudio();
   if (S.view === "stars") renderStars();
   if (S.view === "track") renderTrack();

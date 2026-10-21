@@ -80,6 +80,8 @@ The top bar switches between **Grok Bot box (internal)** and **External**. The c
 
 Internal reading is available only when `/workspace/roster.md` exists and `/home/box/agent-data` is a directory; otherwise that option is disabled. `BOT_OFFICE_INTERNAL=1` forces it on, `=0` forces it off. When the box is detected, internal is the default. Willow Mage is shown as not monitored. Notion `inbox` / `snapshots` / `raw`, secrets, and diary files are never read.
 
+In internal mode the studio, network, timeline and insights read this machine's roster, message index and dispatch log. They do not fall back to the demo team when the Grok Bot app cache is missing. If there is no collaboration to show, the page says "No box collaboration records yet". The demo badge appears only when the data really is the demo team. Willow Mage's messages are left out; your own messages keep only the time and the bot, not the text.
+
 ## Features
 
 ### Studio: bots at work

@@ -563,7 +563,8 @@ h2 .ico,h3 .ico{color:var(--muted)}
 .mode-wrap .segmented button{padding:4px 12px;font-size:13px;white-space:nowrap}
 .segmented button:disabled{opacity:.4;cursor:not-allowed}
 .segmented button:disabled:hover{background:none}
-.mode-note{margin:0;max-width:36ch;font-size:11px;line-height:1.35;color:var(--ink-2)}
+.mode-note{margin:0;max-width:42ch;font-size:11px;line-height:1.35;color:var(--ink-2)}
+.mode-note .retry,.internal-body .retry{margin-left:6px;border:1px solid var(--line);background:var(--card);color:inherit;border-radius:999px;padding:1px 8px;font:inherit;font-size:11px;cursor:pointer}
 .internal-body{display:grid;gap:18px}
 .internal-card{padding:16px 18px 14px}
 .internal-card h3{font-size:16px;margin-bottom:10px}
