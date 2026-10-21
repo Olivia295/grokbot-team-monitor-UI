@@ -15,7 +15,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from backend.box_source import HIDDEN_TITLE, WILLOW_ID, load_box_cache, load_messages
+from backend.box_source import HIDDEN_TITLE, WILLOW_HIDDEN, WILLOW_ID, load_box_cache, load_messages
 from backend.internal_box import SYDNEY, make_config
 from backend.server import Handler
 from backend.views import flows_view, insights_view, office_view
@@ -34,6 +34,7 @@ WILLOW_SECRET = "WILLOW-SECRET-BODY-9f3a"
 WILLOW_REPLY = "WILLOW-REPLY-SECRET-9f3a"
 WILLOW_EDGE = "WILLOW-EDGE-SECRET-9f3a"
 WILLOW_PROFILE = "WILLOW-PROFILE-SECRET-9f3a"
+WILLOW_DUTY = "WILLOW-DUTY-TEXT-9f3a"
 PROFILE_SECRET = "PROFILE-SECRET-DESC-9f3a"
 FILE_SECRET = "SECRET-FILE-SHOULD-NOT-LOAD"
 TAIL = "TAIL-SHOULD-NOT-SHOW-9f3a"
@@ -55,7 +56,7 @@ ROSTER = """# roster
 | Dr Eggbot | 母体 | ce01640f-ff42-4cac-9b87-35ac77fcf368 | 维护名册 | 派活 |
 | Spaceship Co-Pilot | 飞船副驾 | 5de8806d-518b-46bf-b0d2-965efedc1493 | 管博客 | 聊天 |
 | Code Scout | AI 工具管家 | 452c8175-1510-49dc-a538-cddd3f130d34 | 找仓库 | 聊天 |
-| Willow Mage | 心灵陪伴 | 0aae13ef-b790-4061-a6e8-1dc6d5e45803 | 陪伴 | 聊天 |
+| Willow Mage | 心灵陪伴 | 0aae13ef-b790-4061-a6e8-1dc6d5e45803 | WILLOW-DUTY-TEXT-9f3a | 聊天 |
 
 ### 侧栏分组
 | 分组 | 成员 |
@@ -147,17 +148,23 @@ class BoxSourceTest(unittest.TestCase):
     def _dump(self, *values) -> str:
         return json.dumps(values, ensure_ascii=False)
 
-    def test_sql_excludes_willow_and_opens_read_only(self):
+    def test_sql_reads_willow_metadata_without_body(self):
         source = Path(__file__).resolve().parents[1].joinpath("backend", "box_source.py").read_text(encoding="utf-8")
         self.assertIn("mode=ro", source)
         self.assertIn("agent_id NOT IN", source)
+        willow_sql = source.split('_WILLOW_SQL = """', 1)[1].split('"""', 1)[0]
+        self.assertNotIn("body", willow_sql.lower())
         db = self.root / "search-index.db"
         _db(db, [
             (WILLOW_ID, "w", "user", self.now, WILLOW_SECRET, 1),
             (SCOUT, "s", "user", self.now, "hello", 1),
         ])
         rows = load_messages(db, {WILLOW_ID})
-        self.assertEqual([row[0] for row in rows], [SCOUT])
+        self.assertEqual(sorted(row[0] for row in rows), sorted([SCOUT, WILLOW_ID]))
+        willow_rows = [row for row in rows if row[0] == WILLOW_ID]
+        self.assertTrue(all(row[4] is None for row in willow_rows))
+        self.assertEqual(willow_rows[0][2], "user")
+        self.assertEqual(willow_rows[0][3], self.now)
         self.assertNotIn(WILLOW_SECRET, json.dumps(rows, ensure_ascii=False))
 
     def test_handoff_you_willow_sensitive_and_dispatch(self):
@@ -181,6 +188,7 @@ class BoxSourceTest(unittest.TestCase):
             (SCOUT, "s-you-asst", "assistant", t + 3000, YOU_REPLY_SECRET, 4),
             (SCOUT, "s-mid", "user", t + 4000, not_prefix, 5),
             (SCOUT, "s-bound", "user", t + 5000, boundary, 6),
+            (SCOUT, "s-willow-open", "user", t + 12000, f"Willow Mage unfinished {WILLOW_EDGE}", 7),
             (SHIP, "p-mood", "user", t + 6000, mood_body, 1),
             (SHIP, "p-mood-asst", "assistant", t + 7000, "mood reply " + ASSIST_SECRET, 2),
             (SHIP, "p-feel", "user", t + 8000, feel_body, 3),
@@ -189,6 +197,7 @@ class BoxSourceTest(unittest.TestCase):
             (GROK, "g-willow-asst", "assistant", t + 11000, "nope " + ASSIST_SECRET, 3),
             (WILLOW_ID, "w-user", "user", t, WILLOW_SECRET, 1),
             (WILLOW_ID, "w-asst", "assistant", t + 1000, WILLOW_REPLY, 2),
+            (WILLOW_ID, "w-open", "user", self.now, WILLOW_SECRET + "-OPEN", 3),
             (EGG, "e-you", "user", t, f"请看这个 {YOU_SECRET}", 1),
             (EGG, "e-asst", "assistant", t + 500, YOU_REPLY_SECRET, 2),
         ]
@@ -230,10 +239,13 @@ class BoxSourceTest(unittest.TestCase):
         egg_legs = [step for flow in flows["flows"] for step in flow["steps"] if step["from"] == EGG and step["to"] == GROK]
         self.assertEqual([step["text"] for step in egg_legs], ["Dr Eggbot file the roster"])
 
-        for entries, _mtime in cache.transcripts.values():
+        for agent_id, (entries, _mtime) in cache.transcripts.items():
             for entry in entries:
-                if entry["role"] == "assistant" or (entry["role"] == "user" and "fromAgent" not in entry):
+                if entry["role"] == "assistant":
                     self.assertEqual(entry["content"], "")
+                elif entry["role"] == "user" and "fromAgent" not in entry:
+                    expected = WILLOW_HIDDEN if agent_id == WILLOW_ID else ""
+                    self.assertEqual(entry["content"], expected)
                 if entry.get("fromAgent"):
                     self.assertLessEqual(len(entry["content"]), 40)
         for text in _walk_strings([office, flows, insights]):
@@ -256,29 +268,64 @@ class BoxSourceTest(unittest.TestCase):
         dispatch_legs = [step for flow in flows["flows"] for step in flow["steps"] if step["from"] == GROK and step["to"] == EGG]
         self.assertEqual([step["text"] for step in dispatch_legs], ["整理名册里的文件夹名字"])
 
-        self.assertNotIn(WILLOW_ID, cache.transcripts)
-        for token in (WILLOW_SECRET, WILLOW_REPLY, WILLOW_EDGE, WILLOW_PROFILE, PROFILE_SECRET, FILE_SECRET):
+        for token in (WILLOW_SECRET, WILLOW_REPLY, WILLOW_EDGE, WILLOW_PROFILE, WILLOW_DUTY, PROFILE_SECRET, FILE_SECRET):
             self.assertNotIn(token, blob)
-        for link in flows["links"]:
-            self.assertNotIn(WILLOW_ID, (link["from"], link["to"]))
+        self.assertIn(WILLOW_ID, cache.transcripts)
+        self.assertIn(WILLOW_HIDDEN, blob)
+        willow_entries, _mtime = cache.transcript(WILLOW_ID)
+        self.assertGreaterEqual(len(willow_entries), 3)
+        for entry in willow_entries:
+            self.assertIn(entry.get("content") or "", ("", WILLOW_HIDDEN))
+
+        def link_count(source, target):
+            rows = [link for link in flows["links"] if link["from"] == source and link["to"] == target]
+            self.assertEqual(len(rows), 1, flows["links"])
+            return rows[0]["count"]
+
+        def handoffs(source, target):
+            return [
+                step for flow in flows["flows"] for step in flow["steps"]
+                if step["kind"] == "handoff" and step["from"] == source and step["to"] == target
+            ]
+
+        self.assertEqual(link_count(WILLOW_ID, GROK), 1)
+        self.assertEqual(link_count(WILLOW_ID, SCOUT), 1)
+        self.assertEqual(link_count(GROK, WILLOW_ID), 1)
+        done = handoffs(WILLOW_ID, GROK)
+        waiting = handoffs(WILLOW_ID, SCOUT)
+        inbound = handoffs(GROK, WILLOW_ID)
+        self.assertEqual([step["replied"] for step in done], [True])
+        self.assertEqual([step["replied"] for step in waiting], [False])
+        self.assertEqual([step["replied"] for step in inbound], [False])
+        for step in done + waiting + inbound:
+            self.assertEqual(step["text"], WILLOW_HIDDEN)
         for flow in flows["flows"]:
-            self.assertNotIn(WILLOW_ID, flow["participants"])
+            if WILLOW_ID in flow["participants"]:
+                self.assertEqual(flow["trigger"]["text"] in ("", WILLOW_HIDDEN) or flow["trigger"]["kind"] == "automation", True)
+
         willow = next(agent for agent in office["agents"] if agent["id"] == WILLOW_ID)
         self.assertEqual(willow["name"], "Willow Mage")
-        self.assertEqual(willow["snippet"], "")
-        self.assertEqual(willow["roleLine"], "")
-        self.assertEqual(willow["title"], "")
+        self.assertEqual(willow["snippet"], WILLOW_HIDDEN)
+        self.assertEqual(willow["roleLine"], "心灵陪伴")
+        self.assertEqual(willow["title"], "心灵陪伴")
+        self.assertEqual(willow["wingName"], "休整营")
+        self.assertEqual(willow["state"], "researching")
+        self.assertNotEqual(willow["state"], "idle")
+        self.assertGreaterEqual(willow["lastActivityAt"], self.now)
         profile = next(item for item in insights["profiles"] if item["id"] == WILLOW_ID)
-        self.assertEqual(profile["asks"], 0)
-        self.assertEqual(profile["handoffsIn"], 0)
+        self.assertEqual(profile["description"], "心灵陪伴")
+        self.assertEqual(profile["asks"], 2)
+        self.assertEqual(profile["handoffsIn"], 1)
         self.assertEqual(profile["handoffsOut"], 0)
-        self.assertEqual(profile["replies"], 0)
-        self.assertEqual(sum(profile["hours"]), 0)
-        self.assertEqual(profile["partners"], [])
-        for item in insights["profiles"]:
-            self.assertNotIn(WILLOW_ID, {partner["id"] for partner in item["partners"]})
-        for item in insights["feed"]:
-            self.assertNotIn(WILLOW_ID, (item.get("from"), item.get("to")))
+        self.assertEqual(sum(profile["hours"]), 1)
+        self.assertGreaterEqual(profile["lastAt"], self.now)
+        self.assertIn(GROK, {partner["id"] for partner in profile["partners"]})
+        grok_profile = next(item for item in insights["profiles"] if item["id"] == GROK)
+        self.assertIn(WILLOW_ID, {partner["id"] for partner in grok_profile["partners"]})
+        willow_feed = [item for item in insights["feed"] if WILLOW_ID in (item.get("from"), item.get("to"))]
+        self.assertGreaterEqual(len(willow_feed), 2)
+        for item in willow_feed:
+            self.assertIn(item.get("text") or "", ("", WILLOW_HIDDEN))
 
         ssh = next(agent for agent in office["agents"] if agent["id"] == SSH)
         self.assertEqual(ssh["name"], "SSH to Grok via Tailscale")
@@ -341,6 +388,9 @@ class BoxSourceTest(unittest.TestCase):
         self.assertIn("pill.demo", main)
         self.assertIn("source.demo", main)
         self.assertIn("box.empty", main)
+        self.assertIn("（Willow 内容不显示）", i18n)
+        self.assertIn("(Willow content hidden)", i18n)
+        self.assertNotIn("Willow Mage 不监控", i18n)
 
 
 class BoxApiTest(unittest.TestCase):

@@ -123,6 +123,11 @@ function formatGenerated(iso, zone) {
 }
 
 function tasksCell(bot) {
+  if (bot.name === "Willow Mage") {
+    const result = bot.last_result === "replied" ? t("handoff.replied")
+      : bot.last_result === "no-reply" ? t("handoff.noreply") : "—";
+    return `<span class="muted">${esc(t("willow.count", { n: bot.message_count ?? 0 }))} · ${esc(result)} · ${esc(t("willow.hidden"))}</span>`;
+  }
   if (bot.status === "不监控" || bot.status === "no-folder") return '<span class="muted">—</span>';
   const tasks = bot.recent_tasks || [];
   if (!tasks.length) return `<span class="muted">${esc(t("internal.tasks.none"))}</span>`;
@@ -137,8 +142,8 @@ function summaryCard(data) {
     ["internal.stat.recent", summary.recent],
     ["internal.stat.idle", summary.idle],
     ["internal.stat.nofolder", summary.no_folder],
-    ["internal.stat.unmonitored", summary.unmonitored],
   ];
+  if (summary.unmonitored) stats.push(["internal.stat.unmonitored", summary.unmonitored]);
   const chips = stats.map(([key, value]) => (
     `<div class="internal-stat"><b class="num">${esc(value ?? 0)}</b><span>${esc(t(key))}</span></div>`
   )).join("");
@@ -159,9 +164,9 @@ function tableCard(data) {
     const quiet = bot.status === "不监控";
     const last = quiet || !bot.last_activity ? "—" : String(bot.last_activity).replace("T", " ").slice(0, 16);
     const files = quiet ? "—" : String(bot.files_modified_7d ?? 0);
-    const title = bot.duty ? ` title="${esc(bot.duty)}"` : "";
+    const dutyTip = bot.name === "Willow Mage" || !bot.duty ? "" : ` title="${esc(bot.duty)}"`;
     return `<tr>
-      <td class="name"${title}>${esc(bot.name)}</td>
+      <td class="name"${dutyTip}>${esc(bot.name)}</td>
       <td>${esc(bot.label || "—")}</td>
       <td>${esc(bot.group || "—")}</td>
       <td><span class="badge ${esc(statusClass(bot.status))}">${esc(statusLabel(bot.status))}</span></td>

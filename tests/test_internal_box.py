@@ -2,9 +2,11 @@
 
 import json
 import os
+import sqlite3
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
@@ -38,7 +40,7 @@ ROSTER = """# roster
 | Dr Eggbot | 母体 | e1 | 名册 | 派活 |
 | Morning Bridge | 信息主管 | m1 | 晨报 | 每天 |
 | Notion Nexus | 管家 | n1 | Notion | 派活 |
-| Willow Mage | 心灵陪伴 | w1 | 陪伴 | 聊天 |
+| Willow Mage | 心灵陪伴 | w1 | WILLOW-DUTY-TEXT-9f3a | 聊天 |
 
 ### 侧栏分组
 | 分组 | 成员 |
@@ -60,6 +62,8 @@ SECRETS = (
     "SECRET-GROK",
     "SECRET-WILLOW",
     "SECRET-DEEP",
+    "WILLOW-DB-BODY-MARKER-9f3a",
+    "WILLOW-DUTY-TEXT-9f3a",
 )
 
 
@@ -156,6 +160,30 @@ def _sample(root: Path):
 
     willow = box / "willow-private"
     _write(willow / "log.md", "2026-10-21 SECRET-WILLOW 不应该被读到\n")
+    now_ms = int(time.time() * 1000)
+    db_path = agent / "search-index.db"
+    db = sqlite3.connect(db_path)
+    db.execute(
+        """CREATE TABLE messages (
+            id INTEGER PRIMARY KEY,
+            agent_id TEXT NOT NULL,
+            entry_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            timestamp_ms INTEGER NOT NULL,
+            body TEXT NOT NULL,
+            seq INTEGER,
+            in_main_chat INTEGER NOT NULL
+        )"""
+    )
+    db.executemany(
+        "INSERT INTO messages (agent_id, entry_id, role, timestamp_ms, body, seq, in_main_chat) VALUES (?,?,?,?,?,?,1)",
+        [
+            ("w1", "w-user", "user", now_ms - 2000, "WILLOW-DB-BODY-MARKER-9f3a", 1),
+            ("w1", "w-asst", "assistant", now_ms - 1000, "WILLOW-DB-BODY-MARKER-9f3a reply", 2),
+        ],
+    )
+    db.commit()
+    db.close()
     config = make_config(
         box,
         roster=roster,
@@ -284,24 +312,33 @@ class ParseTest(EnvCase):
 
 
 class PrivacyTest(EnvCase):
-    def test_willow_mage_excluded(self):
+    def test_willow_mage_metadata_only(self):
+        source = Path(__file__).resolve().parents[1].joinpath("backend", "internal_box.py").read_text(encoding="utf-8")
+        meta_sql = source.split('_WILLOW_META_SQL = """', 1)[1].split('"""', 1)[0]
+        self.assertNotIn("body", meta_sql.lower())
         with tempfile.TemporaryDirectory() as tmp:
             config, _nexus, _grok = _sample(Path(tmp))
             payload = build(config)
         blob = json.dumps(payload, ensure_ascii=False)
         willow = next(bot for bot in payload["bots"] if bot["name"] == "Willow Mage")
-        self.assertEqual(willow, {
-            "name": "Willow Mage",
-            "label": "心灵陪伴",
-            "group": "休整营",
-            "status": "不监控",
-        })
+        self.assertEqual(willow["label"], "心灵陪伴")
+        self.assertEqual(willow["group"], "休整营")
+        self.assertEqual(willow["status"], "active")
+        self.assertNotEqual(willow["status"], "不监控")
+        self.assertTrue(willow["last_activity"])
+        self.assertEqual(willow["message_count"], 2)
+        self.assertEqual(willow["last_result"], "replied")
+        self.assertEqual(willow["files_modified_7d"], 0)
+        self.assertEqual(willow["log_lines_7d"], 0)
+        self.assertEqual(willow["recent_tasks"], [])
+        self.assertIsNone(willow["folder"])
+        self.assertFalse(willow["duty"])
         self.assertNotIn("SECRET-WILLOW", blob)
+        self.assertNotIn("WILLOW-DB-BODY-MARKER-9f3a", blob)
+        self.assertNotIn("WILLOW-DUTY-TEXT-9f3a", blob)
         self.assertNotIn("willow-private", blob)
-        self.assertFalse(any(
-            "Willow Mage" in (edge["source"], edge["target"]) for edge in payload["edges"]
-        ))
-        self.assertNotIn("Willow Mage", [item["name"] for item in payload["usage"]["estimates"]])
+        self.assertNotIn("不监控", blob)
+        self.assertIn("Willow Mage", [item["name"] for item in payload["usage"]["estimates"]])
         egg = next(bot for bot in payload["bots"] if bot["name"] == "Dr Eggbot")
         self.assertEqual(egg["status"], "no-folder")
 
@@ -319,6 +356,8 @@ class PrivacyTest(EnvCase):
         self.assertEqual(weight("Grok Bot", "Notion Nexus", "mention"), 1)
         self.assertEqual(weight("Morning Bridge", "Grok Bot", "mention"), 1)
         self.assertEqual(weight("Grok Bot", "Dr Eggbot", "dispatch"), 1)
+        self.assertEqual(weight("Grok Bot", "Willow Mage", "mention"), 2)
+        self.assertEqual(weight("Grok Bot", "Willow Mage", "dispatch"), 1)
 
     def test_notion_nexus_private_dirs_skipped(self):
         with tempfile.TemporaryDirectory() as tmp:

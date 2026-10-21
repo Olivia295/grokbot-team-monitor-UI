@@ -78,9 +78,9 @@ If yours lives elsewhere, set it in **Settings → Data source** or via the `GRO
 
 The top bar switches between **Grok Bot box (internal)** and **External**. The choice is stored in the browser. External is the office described above. Internal adds a panel: what each bot has been doing, who mentions whom in the logs, and a usage chart labelled as an estimate. There is no real quota on this machine, so the panel says so.
 
-Internal reading is available only when `/workspace/roster.md` exists and `/home/box/agent-data` is a directory; otherwise that option is disabled. `BOT_OFFICE_INTERNAL=1` forces it on, `=0` forces it off. When the box is detected, internal is the default. Willow Mage is shown as not monitored. Notion `inbox` / `snapshots` / `raw`, secrets, and diary files are never read.
+Internal reading is available only when `/workspace/roster.md` exists and `/home/box/agent-data` is a directory; otherwise that option is disabled. `BOT_OFFICE_INTERNAL=1` forces it on, `=0` forces it off. When the box is detected, internal is the default. Willow Mage shows whether she is working, her last active time and whether a handoff was answered, never her text. Notion `inbox` / `snapshots` / `raw`, secrets, and diary files are never read.
 
-In internal mode the studio, network, timeline and insights read this machine's roster, message index and dispatch log. They do not fall back to the demo team when the Grok Bot app cache is missing. If there is no collaboration to show, the page says "No box collaboration records yet". The demo badge appears only when the data really is the demo team. Willow Mage's messages are left out; your own messages keep only the time and the bot, not the text.
+In internal mode the studio, network, timeline and insights read this machine's roster, message index and dispatch log. They do not fall back to the demo team when the Grok Bot app cache is missing. If there is no collaboration to show, the page says "No box collaboration records yet". The demo badge appears only when the data really is the demo team. Willow Mage's titles and message text are replaced with "(Willow content hidden)"; only counts, times and handoff results remain. Your own messages keep only the time and the bot, not the text.
 
 ## Features
 

@@ -149,6 +149,7 @@ function showFlowDetail(flow) {
     <ol class="relay">${steps.map((step, i) => `<li data-step="${i}" style="--c:${colorVar(step.from)};margin-left:${Math.min(step.depth, 4) * 12}px">
         <div class="row"><span class="t">${plus((step.at || flow.startedAt) - flow.startedAt)}</span>${avatar(step.from, 26)}<span class="muted">→</span>${avatar(step.to, 26)}<span class="who"><b>${esc(nameOf(step.from))}</b> ${esc(stepVerb(step))} <b>${esc(nameOf(step.to))}</b></span></div>
         <div class="text">${esc(stepText(step))}</div>
+        ${step.kind === "handoff" && typeof step.replied === "boolean" ? `<div class="note">${t(step.replied ? "handoff.replied" : "handoff.noreply")}</div>` : ""}
         ${step.kind === "handoff" && !step.traced ? `<div class="note">${t("detail.untraced")}</div>` : ""}
       </li>`).join("")}</ol>`;
 }

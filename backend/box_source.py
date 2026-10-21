@@ -15,8 +15,11 @@ the first 30 characters is a handoff from that bot to X. Any other ``user``
 message is a request from You; its body is never stored. The next ``assistant``
 message in X shares that turn (one relay leg) and its body is never stored.
 
-Willow Mage is name-only: every message with that agent id is excluded in SQL,
-and nothing creates an edge, a partner or an activity sample for that id.
+Willow Mage is included with the other bots, but only as work metadata.
+Her rows are read without the body column. A handoff from her is still a
+prefix match on her name in another bot's message; the rest of that text is
+not kept. Every title or preview that would have been her words, or words
+sent to her, is the neutral placeholder.
 """
 
 from __future__ import annotations
@@ -30,7 +33,8 @@ from urllib.parse import quote
 
 from backend.grok_cache import Cache
 from backend.internal_box import (
-    UNMONITORED,
+    WILLOW_ID,
+    WILLOW_NAME,
     BoxConfig,
     BoxError,
     PrivacyError,
@@ -46,17 +50,25 @@ from backend.internal_box import (
     SYDNEY,
 )
 
-WILLOW_ID = "0aae13ef-b790-4061-a6e8-1dc6d5e45803"
 PREFIX_WINDOW = 30
 TITLE_CHARS = 40
 HIDDEN_TITLE = "（内容已隐藏）"
+WILLOW_HIDDEN = "（Willow 内容不显示）"
 SENSITIVE = ("心情", "情绪", "感受", "难过", "焦虑", "抑郁", "日记", "周记", "mood", "feel", "willow")
 
-# Columns the adapter is allowed to read. Willow's rows are removed in SQL.
+# Other bots: the body is required for prefix matching and for their own titles.
 _MESSAGE_SQL = """
 SELECT agent_id, entry_id, role, timestamp_ms, body, seq
 FROM messages
 WHERE agent_id NOT IN ({marks})
+ORDER BY agent_id, timestamp_ms, COALESCE(seq, 0), entry_id
+"""
+
+# Willow: metadata columns only. NULL stands in for the body so callers share one tuple shape.
+_WILLOW_SQL = """
+SELECT agent_id, entry_id, role, timestamp_ms, NULL, seq
+FROM messages
+WHERE agent_id IN ({marks})
 ORDER BY agent_id, timestamp_ms, COALESCE(seq, 0), entry_id
 """
 
@@ -78,10 +90,14 @@ def empty_box_cache(support: Path | None = None) -> Cache:
 def _willow_ids(bots: list[dict]) -> set[str]:
     found = {WILLOW_ID}
     for bot in bots:
-        if bot.get("name") == UNMONITORED or bot.get("id") == WILLOW_ID:
+        if bot.get("name") == WILLOW_NAME or bot.get("id") == WILLOW_ID:
             if isinstance(bot.get("id"), str) and bot["id"]:
                 found.add(bot["id"])
     return found
+
+
+def _is_willow(agent_id: str | None, name: str | None, willow_ids: set[str]) -> bool:
+    return bool((agent_id and agent_id in willow_ids) or name == WILLOW_NAME)
 
 
 def _boundary_ok(text: str, end: int) -> bool:
@@ -121,24 +137,29 @@ def _connect_ro(path: Path) -> sqlite3.Connection:
 
 
 def load_messages(db_path: Path, willow_ids: set[str]) -> list[tuple]:
-    """Read message rows. Willow's agent id is excluded by the SQL itself."""
+    """Read message rows. Willow's query does not select ``body``."""
     if not willow_ids or not db_path.is_file():
         return []
     if db_path.name != "search-index.db":
         return []
     ids = tuple(sorted(willow_ids))
-    sql = _MESSAGE_SQL.format(marks=",".join("?" for _ in ids))
+    marks = ",".join("?" for _ in ids)
+    other_sql = _MESSAGE_SQL.format(marks=marks)
+    willow_sql = _WILLOW_SQL.format(marks=marks)
     try:
         conn = _connect_ro(db_path)
     except sqlite3.Error:
         return []
     try:
         try:
-            return list(conn.execute(sql, ids))
+            rows = list(conn.execute(other_sql, ids))
+            rows.extend(conn.execute(willow_sql, ids))
         except sqlite3.Error:
             return []
     finally:
         conn.close()
+    rows.sort(key=lambda row: (str(row[0]), int(row[3] or 0), int(row[5] or 0), str(row[1])))
+    return rows
 
 
 def _profile_names(config: BoxConfig, willow_ids: set[str]) -> dict[str, str]:
@@ -177,7 +198,10 @@ def _profile_names(config: BoxConfig, willow_ids: set[str]) -> dict[str, str]:
 
 
 def _roster_rows(bots: list[dict], extra: dict[str, str]) -> tuple[list[dict], dict[str, str], dict[str, str]]:
-    """Office roster rows, plus name→id and id→name maps. Willow keeps a name and nothing else."""
+    """Office roster rows, plus name→id and id→name maps.
+
+    Willow's role line is her roster label. The duty column (只做的一件事) is not copied.
+    """
     rows: list[dict] = []
     name_to_id: dict[str, str] = {}
     id_to_name: dict[str, str] = {}
@@ -186,12 +210,13 @@ def _roster_rows(bots: list[dict], extra: dict[str, str]) -> tuple[list[dict], d
         name = str(bot.get("name") or "")
         if not bot_id or not name:
             continue
-        willow = name == UNMONITORED or bot_id == WILLOW_ID
+        willow = name == WILLOW_NAME or bot_id == WILLOW_ID
+        label = str(bot.get("label") or "")
         row = {
             "id": bot_id,
             "name": name,
-            "title": "" if willow else str(bot.get("label") or ""),
-            "description": "" if willow else str(bot.get("duty") or ""),
+            "title": label,
+            "description": label if willow else str(bot.get("duty") or ""),
             "avatarShape": "",
             "avatarColor": "",
             "createdAt": 0,
@@ -205,7 +230,7 @@ def _roster_rows(bots: list[dict], extra: dict[str, str]) -> tuple[list[dict], d
         id_to_name[bot_id] = name
     known = set(id_to_name)
     for agent_id, name in sorted(extra.items(), key=lambda item: (item[1], item[0])):
-        if agent_id in known or agent_id in {WILLOW_ID}:
+        if agent_id in known or agent_id == WILLOW_ID or name == WILLOW_NAME:
             continue
         rows.append({
             "id": agent_id,
@@ -234,7 +259,7 @@ def _sections(groups: list[dict], name_to_id: dict[str, str]) -> list[dict]:
                 ids.append(bot_id)
         if not ids:
             continue
-        # Willow stays in the group so the name is on the bot list, with no messages behind it.
+        # Sidebar group is her room, the same rule as every other bot.
         sections.append({"id": f"box-room-{index}", "name": group.get("name") or "", "agentIds": ids})
     return sections
 
@@ -276,11 +301,11 @@ def _transcripts(
 ) -> dict[str, tuple[list[dict], int]]:
     grouped: dict[str, list[tuple]] = defaultdict(list)
     for agent_id, entry_id, role, timestamp_ms, body, seq in messages:
-        if agent_id in willow_ids:
-            continue
         if role not in ("user", "assistant"):
             continue
-        grouped[str(agent_id)].append((str(entry_id), role, int(timestamp_ms or 0), body if isinstance(body, str) else "", seq))
+        # Willow rows arrive with a null body. Never substitute the original text.
+        text = body if isinstance(body, str) else ""
+        grouped[str(agent_id)].append((str(entry_id), role, int(timestamp_ms or 0), text, seq))
 
     transcripts: dict[str, tuple[list[dict], int]] = {}
     for agent_id, rows in grouped.items():
@@ -289,28 +314,35 @@ def _transcripts(
             id_to_name[agent_id] = agent_id
         entries: list[dict] = []
         index = 0
+        owner_willow = _is_willow(agent_id, id_to_name.get(agent_id), willow_ids)
         while index < len(rows):
             entry_id, role, at, body, _seq = rows[index]
             if role != "user":
                 entries.append(_activity(entry_id, at, f"box:{agent_id}:{entry_id}"))
                 index += 1
                 continue
-            sender_name = leading_bot(body, names_longest_first)
+            # Prefix-match the name only. Willow's own body was never selected.
+            sender_name = leading_bot(body, names_longest_first) if body else None
             own_name = id_to_name.get(agent_id, "")
             sender_id = name_to_id.get(sender_name or "")
             reply = rows[index + 1] if index + 1 < len(rows) and rows[index + 1][1] == "assistant" else None
             request_id = f"box:{agent_id}:{entry_id}"
-            handoff = bool(sender_name and sender_id and sender_name != own_name and sender_id not in willow_ids and sender_name != UNMONITORED)
+            sender_willow = _is_willow(sender_id, sender_name, willow_ids)
+            handoff = bool(sender_name and sender_id and sender_name != own_name)
             if sender_name and not handoff:
-                # Starts with Willow, or with this bot's own name: not a You request and not an edge.
+                # Starts with this bot's own name: not a You request and not an edge.
                 if reply is not None:
                     entries.append(_activity(reply[0], reply[2], request_id))
                     index += 1
                 index += 1
                 continue
             if handoff:
-                content = task_title(body)
+                # Her words, and anything addressed to her, stay behind the placeholder.
+                content = WILLOW_HIDDEN if sender_willow or owner_willow else task_title(body)
                 sender = (sender_id, sender_name)
+            elif owner_willow:
+                content = WILLOW_HIDDEN
+                sender = None
             else:
                 # You → this bot. Metadata only: time is the timestamp, target is the transcript owner.
                 content = ""
@@ -361,14 +393,16 @@ def _dispatch_edges(
         if not _looks_like_date(date_cell):
             continue
         target_id = name_to_id.get(bot_cell)
-        if not target_id or target_id in willow_ids or target_id == grok_id or bot_cell == UNMONITORED:
+        if not target_id or target_id == grok_id:
             continue
         stamp = _date_ms(date_cell)
         if stamp is None:
             continue
         # Keep rows on the same day in file order without collapsing them.
         stamp += index
-        found.append((target_id, task_title(task), stamp, f"dispatch:{index}:{target_id}"))
+        # A dispatch aimed at Willow is a handoff to her: keep the link, hide the task text.
+        title = WILLOW_HIDDEN if _is_willow(target_id, bot_cell, willow_ids) else task_title(task)
+        found.append((target_id, title, stamp, f"dispatch:{index}:{target_id}"))
     return found
 
 
@@ -410,9 +444,6 @@ def _has_records(transcripts: dict[str, tuple[list[dict], int]]) -> bool:
 def _touch_activity(rows: list[dict], transcripts: dict[str, tuple[list[dict], int]]) -> None:
     for row in rows:
         entries, mtime = transcripts.get(row["id"], ([], 0))
-        if row["id"] == WILLOW_ID or row["name"] == UNMONITORED:
-            row["lastActivityAt"] = 0
-            continue
         row["lastActivityAt"] = mtime or max((entry["timestampMs"] for entry in entries), default=0)
 
 
@@ -445,7 +476,6 @@ def load_box_cache(config: BoxConfig | None = None) -> Cache:
         if any(row["id"] == agent_id for row in rows):
             continue
         if agent_id in willow_ids:
-            transcripts.pop(agent_id, None)
             continue
         rows.append({
             "id": agent_id,
@@ -464,9 +494,6 @@ def load_box_cache(config: BoxConfig | None = None) -> Cache:
     grok_id = name_to_id.get("Grok Bot", "")
     if grok_id:
         _apply_dispatch(transcripts, edges, grok_id)
-    for agent_id in list(transcripts):
-        if agent_id in willow_ids:
-            transcripts.pop(agent_id, None)
     _touch_activity(rows, transcripts)
     cache = Cache(
         support=config.agent_data,

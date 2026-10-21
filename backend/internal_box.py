@@ -9,8 +9,9 @@ never writes, and it never lists or reads:
 - filenames containing 周记 or 日记
 - any non-markdown file, when the caller wants log text
 
-Willow Mage is name, label, group and status ``不监控`` only: no folder read,
-no collaboration edge.
+Willow Mage is included like the other bots for work metadata only. Her
+status comes from ``search-index.db`` timestamps (never her files). Message
+bodies are not selected. Her roster duty text is not published.
 
 Paths are not fixed. ``make_config`` points the same rules at a temp workspace
 so tests never touch the real box. ``os.scandir`` is not replaced process-wide;
@@ -25,9 +26,11 @@ from __future__ import annotations
 
 import os
 import re
+import sqlite3
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 try:
@@ -39,7 +42,10 @@ WINDOW_DAYS = 7
 TASK_LIMIT = 5
 TASK_CHARS = 160
 ENV_OVERRIDE = "BOT_OFFICE_INTERNAL"
-UNMONITORED = "Willow Mage"
+WILLOW_NAME = "Willow Mage"
+WILLOW_ID = "0aae13ef-b790-4061-a6e8-1dc6d5e45803"
+# Older name for the same bot. She is no longer dropped from the office.
+UNMONITORED = WILLOW_NAME
 USAGE_NOTE = "无真实限额/用量数据"
 ESTIMATE_LABEL = "估算：按最近7天日志条目数与文件改动数，不是真实额度消耗"
 
@@ -47,7 +53,8 @@ DEFAULT_WORKSPACE = Path("/workspace")
 DEFAULT_ROSTER = Path("/workspace/roster.md")
 DEFAULT_AGENT_DATA = Path("/home/box/agent-data")
 
-# Slug under the workspace root. Dr Eggbot and Willow Mage have no folder.
+# Slug under the workspace root. Dr Eggbot has no folder. Willow Mage may have
+# one; it is never opened. Her status comes from the message index instead.
 FOLDER_SLUGS = (
     ("Grok Bot", "grok-bot"),
     ("Morning Bridge", "morning-bridge"),
@@ -128,8 +135,8 @@ def make_config(
 
     ``roster``, ``agent_data`` and ``home`` are independent of the workspace so
     a test can place the roster beside a fake ``~/.codex`` without nesting them
-    inside a bot folder. ``extra_folders`` adds or replaces folder-map entries
-    (used to prove Willow Mage is not read even when a path is configured).
+    inside a bot folder. ``extra_folders`` adds or replaces folder-map entries.
+    A path set for Willow Mage is kept on the map and never opened.
     """
     workspace = Path(workspace)
     home = Path(home)
@@ -518,6 +525,73 @@ def names_in_text(text: str, patterns: list[tuple[str, re.Pattern[str]]]) -> lis
     return found
 
 
+def is_willow(bot: dict) -> bool:
+    return bot.get("name") == WILLOW_NAME or str(bot.get("id") or "") == WILLOW_ID
+
+
+def _sqlite_ro_uri(path: Path) -> str:
+    resolved = Path(path).resolve()
+    return "file:" + quote(resolved.as_posix(), safe="/:") + "?mode=ro"
+
+
+# Metadata columns only. The body column is intentionally absent.
+_WILLOW_META_SQL = """
+SELECT agent_id, role, timestamp_ms, seq
+FROM messages
+WHERE agent_id IN ({marks})
+ORDER BY timestamp_ms, COALESCE(seq, 0)
+"""
+
+
+def willow_index_meta(config: BoxConfig, agent_ids: set[str]) -> dict:
+    """Counts, newest timestamp and whether her latest run got a reply.
+
+    Opens ``search-index.db`` read-only and does not select ``body``. Returns
+    zeros when the index is missing. Never touches a Willow folder.
+    """
+    empty = {"message_count": 0, "newest_ms": None, "last_result": None}
+    ids = tuple(sorted(item for item in agent_ids if item))
+    if not ids:
+        return empty
+    db_path = config.agent_data / "search-index.db"
+    if db_path.name != "search-index.db" or is_forbidden(db_path, config):
+        return empty
+    try:
+        ready = db_path.is_file()
+    except OSError:
+        return empty
+    if not ready:
+        return empty
+    sql = _WILLOW_META_SQL.format(marks=",".join("?" for _ in ids))
+    try:
+        conn = sqlite3.connect(_sqlite_ro_uri(db_path), uri=True)
+    except sqlite3.Error:
+        return empty
+    try:
+        try:
+            rows = list(conn.execute(sql, ids))
+        except sqlite3.Error:
+            return empty
+    finally:
+        conn.close()
+    newest: int | None = None
+    last_user: int | None = None
+    replied = False
+    for _agent_id, role, timestamp_ms, _seq in rows:
+        stamp = int(timestamp_ms or 0)
+        if newest is None or stamp > newest:
+            newest = stamp
+        if role == "user":
+            last_user = stamp
+            replied = False
+        elif role == "assistant" and last_user is not None and stamp >= last_user:
+            replied = True
+    result = None
+    if last_user is not None:
+        result = "replied" if replied else "no-reply"
+    return {"message_count": len(rows), "newest_ms": newest, "last_result": result}
+
+
 def status_for(newest: float | None, now: datetime, has_folder: bool) -> str:
     if not has_folder:
         return "no-folder"
@@ -546,11 +620,15 @@ def split_table_row(line: str) -> list[str] | None:
 
 def render_summary(now: datetime, counts: Counter, top_activity: list[dict], top_pairs: list[dict]) -> str:
     stamp = now.strftime("%Y-%m-%d %H:%M")
+    extra = f"；另有无文件夹 {counts.get('no-folder', 0)} 个"
+    unmonitored = counts.get("不监控", 0)
+    if unmonitored:
+        extra += f"，不监控 {unmonitored} 个"
     sentences = [
         (
             f"截至 {stamp}（悉尼）：活跃 {counts.get('active', 0)} 个，"
             f"近期 {counts.get('recent', 0)} 个，空闲 {counts.get('idle', 0)} 个"
-            f"；另有无文件夹 {counts.get('no-folder', 0)} 个，不监控 {counts.get('不监控', 0)} 个。"
+            f"{extra}。"
         )
     ]
     if top_activity:
@@ -585,15 +663,23 @@ def validate(payload: dict) -> None:
         raise BoxError("usage.note mismatch")
     if usage.get("estimate_label") != ESTIMATE_LABEL:
         raise BoxError("estimate label mismatch")
-    willow = [bot for bot in payload["bots"] if bot.get("name") == UNMONITORED]
-    if len(willow) != 1:
+    willow_rows = [bot for bot in payload["bots"] if bot.get("name") == WILLOW_NAME]
+    if len(willow_rows) != 1:
         raise BoxError("Willow Mage record missing")
-    allowed_keys = {"name", "label", "group", "status"}
-    if set(willow[0].keys()) != allowed_keys or willow[0]["status"] != "不监控":
-        raise BoxError(f"Willow Mage record is not minimal: {willow[0]!r}")
+    willow = willow_rows[0]
+    if willow.get("status") == "不监控" or willow.get("status") not in ("active", "recent", "idle"):
+        raise BoxError(f"Willow Mage status must follow her activity: {willow.get('status')!r}")
+    if willow.get("folder"):
+        raise BoxError("Willow Mage folder must not be recorded")
+    if willow.get("recent_tasks"):
+        raise BoxError("Willow Mage tasks must stay empty")
+    if willow.get("duty"):
+        raise BoxError("Willow Mage duty text must not be exposed")
+    if not isinstance(willow.get("message_count"), int) or willow["message_count"] < 0:
+        raise BoxError("Willow Mage message_count missing")
+    if willow.get("last_result") not in (None, "replied", "no-reply"):
+        raise BoxError(f"Willow Mage last_result invalid: {willow.get('last_result')!r}")
     for edge in payload["edges"]:
-        if UNMONITORED in (edge["source"], edge["target"]):
-            raise BoxError("Willow Mage must not appear in edges")
         if edge["kind"] not in ("mention", "dispatch"):
             raise BoxError(f"unexpected edge kind: {edge['kind']}")
     for bot in payload["bots"]:
@@ -606,8 +692,6 @@ def validate(payload: dict) -> None:
         if bot["name"] == "Dr Eggbot" and bot.get("status") != "no-folder":
             raise BoxError("Dr Eggbot should be no-folder")
     for estimate in usage["estimates"]:
-        if estimate["name"] == UNMONITORED:
-            raise BoxError("Willow Mage must not be in the estimate")
         expected = estimate["log_lines_7d"] + estimate["files_modified_7d"]
         if estimate["activity"] != expected:
             raise BoxError(f"activity mismatch for {estimate['name']}")
@@ -621,8 +705,12 @@ def build(config: BoxConfig | None = None) -> dict:
     roster, groups = load_roster(config)
     roster_names = [bot["name"] for bot in roster]
     known = set(roster_names)
-    mention_names = [name for name in roster_names if name != UNMONITORED]
-    patterns = compile_name_patterns(mention_names)
+    patterns = compile_name_patterns(roster_names)
+    willow_ids = {WILLOW_ID}
+    for bot in roster:
+        if is_willow(bot) and bot.get("id"):
+            willow_ids.add(str(bot["id"]))
+    willow_meta = willow_index_meta(config, willow_ids)
 
     edges: Counter[tuple[str, str, str]] = Counter()
     bots_out: list[dict] = []
@@ -630,15 +718,29 @@ def build(config: BoxConfig | None = None) -> dict:
 
     for bot in roster:
         name = bot["name"]
-        if name == UNMONITORED:
-            bots_out.append(
-                {
-                    "name": name,
-                    "label": bot["label"],
-                    "group": bot["group"],
-                    "status": "不监控",
-                }
-            )
+        if is_willow(bot):
+            newest_ms = willow_meta["newest_ms"]
+            newest = None if newest_ms is None else newest_ms / 1000.0
+            record = {
+                "name": name,
+                "label": bot["label"],
+                "id": bot["id"],
+                "duty": "",
+                "trigger": bot["trigger"],
+                "group": bot["group"],
+                "folder": None,
+                "status": status_for(newest, now, True),
+                "last_activity": iso_local(newest) if newest is not None else None,
+                "files_modified_7d": 0,
+                "log_lines_7d": 0,
+                "activity": 0,
+                "share_pct": 0.0,
+                "recent_tasks": [],
+                "message_count": willow_meta["message_count"],
+                "last_result": willow_meta["last_result"],
+            }
+            bots_out.append(record)
+            measured.append(record)
             continue
 
         folder = config.folder_map.get(name)
@@ -680,9 +782,7 @@ def build(config: BoxConfig | None = None) -> dict:
                     if not line.strip():
                         continue
                     for mentioned in names_in_text(line, patterns):
-                        if mentioned == name or mentioned == UNMONITORED:
-                            continue
-                        if mentioned not in known:
+                        if mentioned == name or mentioned not in known:
                             continue
                         edges[(name, mentioned, "mention")] += 1
         record["activity"] = record["log_lines_7d"] + record["files_modified_7d"]
@@ -708,11 +808,11 @@ def build(config: BoxConfig | None = None) -> dict:
                 continue
             bot_cell = cells[2]
             targets: list[str] = []
-            if bot_cell in known and bot_cell != UNMONITORED and bot_cell != "Grok Bot":
+            if bot_cell in known and bot_cell != "Grok Bot":
                 targets = [bot_cell]
             else:
                 for mentioned in names_in_text(bot_cell, patterns):
-                    if mentioned in (UNMONITORED, "Grok Bot"):
+                    if mentioned == "Grok Bot":
                         continue
                     targets.append(mentioned)
             seen: set[str] = set()
@@ -732,7 +832,7 @@ def build(config: BoxConfig | None = None) -> dict:
     edge_rows = [
         {"source": source, "target": target, "kind": kind, "weight": weight}
         for (source, target, kind), weight in edges.items()
-        if weight > 0 and UNMONITORED not in (source, target)
+        if weight > 0
     ]
     edge_rows.sort(key=lambda row: (-row["weight"], row["source"], row["target"], row["kind"]))
 
