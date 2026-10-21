@@ -41,6 +41,7 @@ Bot Office reads the cache Grok Bot keeps on your machine, stitches the handoffs
 - **Alerts**: desktop notifications, Slack, Discord, Feishu or DingTalk when a bot errors, waits on you, or leaves a handoff hanging, even with the page closed.
 - **Made to share**: weekly reports as Markdown or an image, a big-screen mode for the office TV, and a transparent overlay for streams.
 - **Works beyond Grok**: CrewAI, LangGraph, the OpenAI Agents SDK or your own scripts can feed the same office through a simple JSONL event log.
+- **Two ways to read Grok Bot**: from your computer (the Grok Bot app's cache), or from inside the Grok Bot box itself, which adds each bot's work status, recent tasks and who dispatches whom.
 - **Local and read-only**: it listens on `127.0.0.1` only, never writes to Grok Bot's files, and uploads nothing. Alerts go only to the addresses you add, and privacy mode hides every message in one click.
 - **Zero setup**: Python 3.9+ standard library only, with no build step. A demo team lets you try it without Grok Bot, and an [online demo](https://olivia295.github.io/grokbot-teamwork-UI/) needs no install at all.
 
@@ -56,6 +57,7 @@ Bot Office reads the cache Grok Bot keeps on your machine, stitches the handoffs
 | 📤 | **Export & share**: weekly report as Markdown or PNG, and any relay replay as an animated GIF | Daily digest card · replay bar |
 | 📦 | **Easier install**: `pipx` / `uvx`, a Homebrew formula with `brew services`, and a macOS menu-bar app that starts at login | [Quick start](#quick-start) |
 | 📺 | **Big screen & overlay**: full-screen TV mode that rotates views with a live ticker, and a transparent OBS overlay | 📺 in the header · `?tv=1` · `?overlay=1` |
+| 🗄 | **Grok Bot box reading**: run Bot Office inside the Grok Bot box to read its roster, message index and dispatch log, with a work-status panel on top. One switch for the page, alerts and the big screen | Header switch · [Inside the Grok Bot box](#inside-the-grok-bot-box) |
 
 ## Quick start
 
@@ -214,6 +216,28 @@ curl -X POST http://127.0.0.1:19200/api/events -H 'Content-Type: application/jso
 
 The full format (`ask`, `handoff`, `reply`, `error`, `status`, `schedule`, `bot`), a drop-in Python client ([`integrations/bot_office.py`](integrations/bot_office.py)) and recipes for the OpenAI Agents SDK, LangGraph and CrewAI are in **[docs/events.md](docs/events.md)**. To watch it work right away, run `python3 examples/simulate_events.py --post --live`.
 
+## Inside the Grok Bot box
+
+Bot Office can also run **inside the Grok Bot box** (the machine your bots work on). There it reads the box's own files instead of the app cache on your computer. The header then shows a switch: **Grok Bot box (internal)** / **External**.
+
+| | Box reading (internal) | External reading (your computer) |
+| --- | --- | --- |
+| Where it runs | Inside the Grok Bot box | The computer with the Grok Bot app |
+| Bots and rooms | `/workspace/roster.md` (names, labels, duties, sidebar groups) | The app's roster and sidebar groups |
+| Handoffs | `search-index.db` messages (read-only) and `dispatch-log.md` | `toAgent` / `fromAgent` in cached transcripts |
+| Coverage | Every bot in the message index, including ones you haven't opened lately | Bots whose transcripts the app has cached |
+| Extra panel | Work status from folder activity, recent tasks from each bot's log, mention/dispatch edges, an activity **estimate** | — |
+| Weekly quota | Not available on the box (the panel says so) | **Real** percentage, plan and reset date |
+| Message text | Short handoff titles only. Your own messages keep only time and recipient | Full text (hide it with privacy mode) |
+
+- **When it switches on**: internal reading is available when both `/workspace/roster.md` and `/home/box/agent-data` exist. `BOT_OFFICE_INTERNAL=1` forces it on and `=0` forces it off. With **Settings → Data source → Reading mode** on *Automatic*, the box is read whenever it's available. The header switch saves your choice for the page, alerts, the big screen and the menu-bar app together. Off the box, the internal option is disabled and `/api/internal` answers 403.
+- **What it never reads**: Notion Nexus `inbox` / `snapshots` / `raw`, `~/.codex`, `~/.grok`, `auth.json`, anything with `token` in its name, `*.env`, and files named 周记 / 日记. Willow Mage shows only its name and "not monitored". Handoff titles that look personal are replaced with "(hidden)". The SQLite index is opened read-only (`mode=ro`).
+- **No demo stand-ins**: with no records yet, the box view says "No box collaboration records yet" instead of showing the demo team.
+
+### Opening the box's office from elsewhere
+
+The server only listens on `127.0.0.1`. If the box exposes it through a proxy or tunnel, list that host name in `BOT_OFFICE_ALLOWED_HOSTS` (comma-separated). Requests through those names need an access token: the server prints a link with `?token=…` when it starts. Open it once and the token is kept as a cookie. Scripts can send `Authorization: Bearer <token>` instead. Set `BOT_OFFICE_TOKEN` to keep the same token across restarts. Without the token, the page and API refuse, so the box's data stays private even when the address is reachable.
+
 ## Settings & customization
 
 Open settings from the gear at the top right. Everything is saved on your machine: `data/settings.json` in a checkout (git-ignored), or your user folder when installed.
@@ -222,7 +246,7 @@ Open settings from the gear at the top right. Everything is saved on your machin
 | --- | --- |
 | General | Language (system / 中文 / English), theme, default time range, refresh rate, animation level, auto replay |
 | Privacy | Privacy mode hides every message and bot description, keeping only who works with whom. Useful for screenshots and screen sharing |
-| Data source | Automatic / Grok Bot / event log / demo, a custom Grok Bot folder and the event-log path |
+| Data source | Reading mode (automatic / Grok Bot box / external), source (automatic / Grok Bot / event log / demo), a custom Grok Bot folder and the event-log path |
 | Alerts | What to alert on, wait threshold, cooldown, quiet hours, desktop notifications, webhooks, test button |
 | Big screen & streaming | Time per view, big-screen and overlay URLs to copy |
 | Rooms | Rename, reorder or hide rooms |
@@ -257,6 +281,8 @@ Each bot is assembled from swappable parts. The default look comes from its Grok
 flowchart LR
   A[Grok Bot local cache] -->|read-only| B[grok_cache.py]
   J[JSONL event log<br/>or POST /api/events] --> K[events.py]
+  X[Grok Bot box<br/>roster · search-index.db · logs] -->|read-only| Y[box_source.py<br/>internal_box.py]
+  Y --> C
   B --> C[collab.py<br/>state · relays · bottlenecks]
   K --> C
   B --> D[insights.py<br/>profiles · awards · digest]
@@ -286,6 +312,8 @@ backend/
   server.py      local HTTP server (--port / --demo / --events / --open / --tv)
   grok_cache.py  reads Grok Bot's cache, finds the folder on each OS
   events.py      generic JSONL event adapter + POST /api/events
+  internal_box.py  Grok Bot box: roster, bot folders, work status, privacy rules
+  box_source.py    Grok Bot box: message index + dispatch log → relays
   collab.py      office state, relay reconstruction, bottlenecks
   insights.py    profiles, achievements, activity, digest, rhythm
   alerts.py      alert watcher, desktop notifications, webhooks
@@ -294,7 +322,7 @@ backend/
   demo.py        the demo team
 frontend/
   index.html  settings.html  css/app.css
-  js/  i18n.js · avatars.js · common.js · stage.js · panels.js · export.js · tv.js · main.js · settings.js
+  js/  i18n.js · avatars.js · common.js · stage.js · panels.js · internal.js · export.js · tv.js · main.js · settings.js
 integrations/    bot_office.py: drop-in Python client for the event log
 examples/        simulate_events.py: a fake team to try the event adapter
 scripts/         build_pages.py: builds the static online demo into site/

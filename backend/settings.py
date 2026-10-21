@@ -21,6 +21,7 @@ LANGUAGES = {"auto", "zh", "en"}
 THEMES = {"auto", "light", "dark"}
 MOTIONS = {"full", "calm", "off"}
 SOURCES = {"auto", "grok", "events", "demo"}
+READ_MODES = {"auto", "internal", "external"}
 HOOK_KINDS = {"slack", "discord", "feishu", "dingtalk", "generic"}
 MAX_HOOKS = 8
 WINDOWS = {24, 168, 720}
@@ -38,6 +39,8 @@ DEFAULTS = {
     "privacy": False,
     "refreshSeconds": 3,
     "dataSource": "auto",
+    # Grok Bot box: "auto" reads the box when this machine is one, "internal" / "external" pin it.
+    "readMode": "auto",
     "supportDir": "",
     "eventsPath": "",
     "tvSeconds": 20,
@@ -146,6 +149,8 @@ def clean(raw) -> dict:
         out["refreshSeconds"] = raw["refreshSeconds"]
     if raw.get("dataSource") in SOURCES:
         out["dataSource"] = raw["dataSource"]
+    if raw.get("readMode") in READ_MODES:
+        out["readMode"] = raw["readMode"]
     out["supportDir"] = _text(raw.get("supportDir"), 512)
     out["eventsPath"] = _text(raw.get("eventsPath"), 512)
     if isinstance(raw.get("tvSeconds"), int) and 5 <= raw["tvSeconds"] <= 600:

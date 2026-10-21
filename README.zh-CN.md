@@ -41,6 +41,7 @@ Bot协作室读取 Grok Bot 留在本机的缓存，把这些交接拼回完整�
 - **提醒**：bot 出错、等你回复、交接没人接时，发桌面通知，或推到 Slack、Discord、飞书、钉钉，页面关着也能收到。
 - **方便分享**：周报导出成 Markdown 或图片，办公室电视用的大屏模式，直播用的透明叠加层。
 - **不止 Grok**：CrewAI、LangGraph、OpenAI Agents SDK 或你自己的脚本，写一个简单的 JSONL 事件日志就能出现在同一间办公室里。
+- **两种读取 Grok Bot 的方式**：在电脑上读 Grok Bot 应用的缓存，或者直接在 Grok Bot 本机（bot 们干活的那台机器）里读，多出每个 bot 的工作状态、最近任务和谁给谁派活。
 - **只在本机、只读**：只监听 `127.0.0.1`，不改 Grok Bot 的文件，不上传任何数据；提醒只发到你自己填的地址；隐私模式一键隐藏所有消息内容。
 - **开箱即用**：Python 3.9+ 标准库，零依赖、不用构建；没有 Grok Bot 也能用演示团队体验，[在线演示](https://olivia295.github.io/grokbot-teamwork-UI/)连安装都不用。
 
@@ -56,6 +57,7 @@ Bot协作室读取 Grok Bot 留在本机的缓存，把这些交接拼回完整�
 | 📤 | **导出与分享**：周报导出成 Markdown 或图片，任意一段回放导出成 GIF 动图 | 日报卡片 · 回放栏 |
 | 📦 | **更容易安装**：`pipx` / `uvx`、Homebrew 配方（支持 `brew services`），以及开机自启的 macOS 菜单栏小程序 | [快速开始](#快速开始) |
 | 📺 | **大屏与直播**：全屏电视模式，自动轮播各个视图并滚动最新动态；透明背景的 OBS 叠加层 | 顶栏 📺 · `?tv=1` · `?overlay=1` |
+| 🗄 | **Grok Bot 本机读取**：在 Grok Bot 本机里运行，读取名册、消息索引和分派日志，并多一块工作状态面板；页面、提醒、大屏共用同一个开关 | 顶栏开关 · [在 Grok Bot 本机里运行](#在-grok-bot-本机里运行) |
 
 ## 快速开始
 
@@ -214,6 +216,28 @@ curl -X POST http://127.0.0.1:19200/api/events -H 'Content-Type: application/jso
 
 完整格式（`ask`、`handoff`、`reply`、`error`、`status`、`schedule`、`bot`）、可直接复制使用的 Python 客户端（[`integrations/bot_office.py`](integrations/bot_office.py)），以及 OpenAI Agents SDK、LangGraph、CrewAI 的接入示例，都在 **[docs/events.md](docs/events.md)**。想马上看到效果，运行 `python3 examples/simulate_events.py --post --live`。
 
+## 在 Grok Bot 本机里运行
+
+Bot协作室也可以直接跑在 **Grok Bot 本机**（bot 们干活的那台机器）里，读取本机自己的文件，而不是你电脑上的应用缓存。这时顶栏会出现一个开关：**Grok Bot 本机读取** / **外部读取**。
+
+| | 本机读取 | 外部读取（你的电脑） |
+| --- | --- | --- |
+| 在哪里运行 | Grok Bot 本机里 | 装着 Grok Bot 应用的电脑 |
+| bot 和房间 | `/workspace/roster.md`（名字、标签、职责、侧栏分组） | 应用里的名册和侧栏分组 |
+| 交接 | `search-index.db` 里的消息（只读）和 `dispatch-log.md` | 缓存对话里的 `toAgent` / `fromAgent` |
+| 覆盖范围 | 消息索引里的所有 bot，包括很久没打开的 | 应用缓存过对话的 bot |
+| 额外面板 | 按文件夹改动判断的工作状态、各 bot 日志里的最近任务、提及 / 分派关系、活跃度**估算** | — |
+| 本周额度 | 本机没有（面板会写明） | **真实**的剩余百分比、套餐和重置日期 |
+| 消息内容 | 只保留简短的交接标题；你自己的消息只留时间和对象 | 完整内容（可用隐私模式隐藏） |
+
+- **什么时候可用**：`/workspace/roster.md` 和 `/home/box/agent-data` 都存在时才能本机读取；`BOT_OFFICE_INTERNAL=1` 强制打开，`=0` 强制关闭。**设置 → 数据来源 → 读取方式** 选「自动」时，能本机读取就本机读取。顶栏开关会把选择保存下来，页面、提醒、大屏和菜单栏小程序一起切换。不在本机时，本机读取选项会禁用，`/api/internal` 返回 403。
+- **永远不读的东西**：Notion Nexus 的 `inbox` / `snapshots` / `raw`、`~/.codex`、`~/.grok`、`auth.json`、名字里带 `token` 的文件、`*.env`，以及名字里有「周记」「日记」的文件。Willow Mage 只显示名字和「不监控」。看起来涉及个人情绪的交接标题会显示成「（内容已隐藏）」。SQLite 索引以只读方式（`mode=ro`）打开。
+- **不拿演示数据凑数**：还没有记录时，本机模式显示「本机暂无协作记录」，不会换成演示团队。
+
+### 从别的地方打开本机的办公室
+
+后台只监听 `127.0.0.1`。如果 Grok Bot 本机通过代理或隧道把它暴露出去，把那个域名写进 `BOT_OFFICE_ALLOWED_HOSTS`（多个用逗号分隔）。通过这些域名访问需要访问令牌：后台启动时会打印一个带 `?token=…` 的链接，打开一次后令牌会存进 cookie；脚本可以改用 `Authorization: Bearer <token>`。设置 `BOT_OFFICE_TOKEN` 可以让令牌在重启后保持不变。没有令牌时页面和接口都会拒绝，所以即使地址能被访问，本机数据也不会被别人看到。
+
 ## 设置与自定义
 
 点右上角的齿轮进入设置。所有设置只保存在你的电脑上：源码目录里是 `data/settings.json`（已加入 `.gitignore`），安装版在用户目录。
@@ -222,7 +246,7 @@ curl -X POST http://127.0.0.1:19200/api/events -H 'Content-Type: application/jso
 | --- | --- |
 | 通用 | 语言（跟随系统 / 中文 / English）、主题、默认时间范围、刷新频率、动画强度、自动放映 |
 | 隐私 | 隐私模式：隐藏所有消息和 bot 介绍，只保留谁和谁在协作，适合截图和屏幕共享 |
-| 数据来源 | 自动 / Grok Bot / 事件日志 / 演示，自定义 Grok Bot 数据文件夹和事件日志路径 |
+| 数据来源 | 读取方式（自动 / Grok Bot 本机 / 外部）、数据来源（自动 / Grok Bot / 事件日志 / 演示）、自定义 Grok Bot 数据文件夹和事件日志路径 |
 | 提醒 | 提醒哪些事、等待阈值、防重复间隔、免打扰时段、桌面通知、Webhook、测试按钮 |
 | 大屏与直播 | 每个画面停留多久，复制大屏和叠加层地址 |
 | 房间 | 重命名、调整顺序、隐藏房间 |
@@ -257,6 +281,8 @@ curl -X POST http://127.0.0.1:19200/api/events -H 'Content-Type: application/jso
 flowchart LR
   A[Grok Bot 本地缓存] -->|只读| B[grok_cache.py]
   J[JSONL 事件日志<br/>或 POST /api/events] --> K[events.py]
+  X[Grok Bot 本机<br/>名册 · search-index.db · 日志] -->|只读| Y[box_source.py<br/>internal_box.py]
+  Y --> C
   B --> C[collab.py<br/>状态 · 流程 · 瓶颈]
   K --> C
   B --> D[insights.py<br/>档案 · 成就 · 日报]
@@ -286,6 +312,8 @@ backend/
   server.py      本地 HTTP 服务（--port / --demo / --events / --open / --tv）
   grok_cache.py  读取 Grok Bot 缓存，按系统找数据目录
   events.py      通用 JSONL 事件适配器 + POST /api/events
+  internal_box.py  Grok Bot 本机：名册、bot 文件夹、工作状态、隐私规则
+  box_source.py    Grok Bot 本机：消息索引 + 分派日志 → 协作流程
   collab.py      办公室状态、流程还原、瓶颈分析
   insights.py    档案、成就、动态、日报、作息
   alerts.py      提醒：后台检查、桌面通知、Webhook
@@ -294,7 +322,7 @@ backend/
   demo.py        演示团队
 frontend/
   index.html  settings.html  css/app.css
-  js/  i18n.js · avatars.js · common.js · stage.js · panels.js · export.js · tv.js · main.js · settings.js
+  js/  i18n.js · avatars.js · common.js · stage.js · panels.js · internal.js · export.js · tv.js · main.js · settings.js
 integrations/    bot_office.py：事件日志的 Python 客户端，复制即用
 examples/        simulate_events.py：模拟一个团队，体验事件适配器
 scripts/         build_pages.py：把在线演示构建到 site/

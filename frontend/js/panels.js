@@ -38,7 +38,8 @@ function renderHero() {
       <p>${esc(usage.plan || "Grok")}${days == null ? "" : ` · ${days ? t("fuel.reset", { n: days }) : t("fuel.resetToday")}`}</p>
       <p>${t(left > 40 ? "fuel.ok" : left > 15 ? "fuel.low" : "fuel.empty")}</p>`;
   } else {
-    $("#fuel").innerHTML = `<h3>${icon("bolt")} ${t("fuel.title")}</h3><p style="grid-column:1/-1">${t("fuel.none")}</p>`;
+    // The box has no quota data at all; the real numbers only exist in the Grok Bot app's cache.
+    $("#fuel").innerHTML = `<h3>${icon("bolt")} ${t("fuel.title")}</h3><p style="grid-column:1/-1">${t(office.source?.box ? "fuel.box" : "fuel.none")}</p>`;
   }
 }
 
@@ -155,6 +156,10 @@ function renderFlowList() {
   }
   const list = $("#flow-list");
   if (!flows.length) {
+    if (S.office?.source?.box && S.office.source.empty) {
+      list.innerHTML = `<li class="empty">${esc(t("box.empty"))}</li>`;
+      return;
+    }
     list.innerHTML = `<li class="empty">${t(S.filter === "all" && !filtering ? "flows.none" : "flows.noneFiltered")}${S.hours < 720 ? `<br><button type="button" data-widen>${t("flows.widen")}</button>` : ""}</li>`;
     return;
   }
@@ -170,7 +175,7 @@ function renderFeed() {
   $("#feed").innerHTML = feed.map((item) => `<li data-profile="${esc(item.kind === "ask" ? item.to : item.from)}">
       <span class="icon">${icons[item.kind]}</span>
       <div style="min-width:0"><div class="what">${feedSentence(item)}</div>${item.kind !== "automation" && item.text ? `<div class="text">${esc(masked(item.text))}</div>` : ""}<time>${ago(item.at)} · ${clock(item.at)}</time></div>
-    </li>`).join("") || `<li class="empty">${t("feed.none")}</li>`;
+    </li>`).join("") || `<li class="empty">${esc(t(S.office?.source?.box && S.office.source.empty ? "box.empty" : "feed.none"))}</li>`;
 }
 
 function showFlowDetail(flow) {
@@ -251,7 +256,7 @@ function renderPairs() {
       </div>
       ${pair.quote ? `<div class="pair-quote">${esc(nameOf(pair.quote.from))}：${esc(cut(stepText(pair.quote), 70))}</div>` : ""}
       <div class="pair-foot"><span><span class="chip">${t(pair.ab && pair.ba ? "pairs.mutual" : "pairs.oneway")}</span> ${t("pairs.last", { when: ago(pair.lastAt) })}</span>${pair.flow ? `<button type="button" data-pair-replay="${pair.flow.id}" data-step="${pair.stepIndex}">${t("pairs.watch")} ▶</button>` : ""}</div>
-    </li>`).join("") || `<li class="empty">${t("flows.none")}</li>`;
+    </li>`).join("") || `<li class="empty">${esc(t(S.office?.source?.box && S.office.source.empty ? "box.empty" : "flows.none"))}</li>`;
 }
 
 // ---------------------------------------------------------------- insight cards

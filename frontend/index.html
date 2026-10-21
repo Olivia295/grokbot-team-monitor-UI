@@ -14,6 +14,13 @@
       <div><h1 data-i18n="app.title">Bot协作室</h1><p data-i18n="app.tagline"></p></div>
     </div>
     <div class="top-tools">
+      <div class="mode-wrap" id="mode-switch">
+        <div class="segmented" role="group" data-i18n-aria="aria.mode">
+          <button type="button" id="mode-internal" data-mode="internal" aria-pressed="false" disabled data-i18n="mode.internal"></button>
+          <button type="button" id="mode-external" data-mode="external" aria-pressed="true" data-i18n="mode.external"></button>
+        </div>
+        <p class="mode-note" id="mode-note" hidden></p>
+      </div>
       <div class="segmented" role="group" data-i18n-aria="aria.window">
         <button type="button" data-hours="24" aria-pressed="true" data-i18n="window.24"></button>
         <button type="button" data-hours="168" aria-pressed="false" data-i18n="window.168"></button>
@@ -43,6 +50,14 @@
         <div class="tiles" id="tiles"></div>
       </div>
       <div class="card fuel" id="fuel"></div>
+    </section>
+
+    <section id="internal-panel" hidden aria-labelledby="internal-title">
+      <div class="section-title">
+        <h2 id="internal-title" data-i18n="internal.title"></h2>
+        <span class="muted" id="internal-stamp"></span>
+      </div>
+      <div id="internal-body" class="internal-body"></div>
     </section>
 
     <section class="awards-wrap" aria-labelledby="awards-title">
@@ -186,6 +201,7 @@
   <script src="js/common.js"></script>
   <script src="js/stage.js"></script>
   <script src="js/panels.js"></script>
+  <script src="js/internal.js"></script>
   <script src="js/export.js"></script>
   <script src="js/tv.js"></script>
   <script src="js/main.js"></script>

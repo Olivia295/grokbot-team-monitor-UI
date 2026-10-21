@@ -12,6 +12,12 @@ const S = {
   hover: null,
   replay: null,
   ambient: true,
+  dataMode: "external",
+  modeInfo: null,
+  modeRequestFailed: false,
+  internal: null,
+  internalError: false,
+  internalRequestFailed: false,
 };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -43,6 +49,32 @@ async function postJson(url, body) {
   const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!response.ok) throw new Error(String(response.status));
   return response.json();
+}
+// Distinguishes "not on this box" (403 + internal_available false) from a broken request.
+async function fetchJson(url) {
+  if (STATIC) {
+    // The online demo has no box behind it.
+    if (url.startsWith("api/internal")) return { ok: false, unavailable: true, data: { internal_available: false, reason: "online demo" } };
+    try { return { ok: true, data: await staticJson(url) }; } catch { return { ok: false, failed: true }; }
+  }
+  let response;
+  try {
+    response = await fetch(url, { cache: "no-store" });
+  } catch {
+    return { ok: false, failed: true };
+  }
+  let data = null;
+  try { data = await response.json(); } catch { data = null; }
+  if (response.status === 403 && data && data.internal_available === false) {
+    return { ok: false, unavailable: true, data };
+  }
+  if (!response.ok) return { ok: false, failed: true, status: response.status, data };
+  return { ok: true, data };
+}
+// Ask for exactly what the read-mode switch shows (the server falls back to the saved setting).
+function withBox(url) {
+  if (!S.modeInfo?.internal_available) return url;
+  return url + (url.includes("?") ? "&" : "?") + `box=${S.dataMode === "internal" ? 1 : 0}`;
 }
 async function loadSettings() {
   try {
@@ -105,6 +137,7 @@ async function staticJson(url) {
     return { ...structuredClone(DEFAULT_SETTINGS), dataSource: "demo", ...saved };
   }
   if (path === "api/alerts") return { enabled: false, alerts: [] };
+  if (path === "api/mode") return { internal_available: false, reason: "online demo", mode: "external", setting: "auto" };
   const lang = S.lang === "en" ? "en" : "zh";
   const { shift, frame } = staticClock();
   let data;
@@ -172,6 +205,7 @@ function applySettings() {
     themeButton.innerHTML = icon(dark ? "sun" : "moon", 17);
   }
   translatePage();
+  if (typeof syncModeChrome === "function") syncModeChrome();
 }
 
 // ---------------------------------------------------------------- formatting

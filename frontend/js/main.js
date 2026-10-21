@@ -1,19 +1,36 @@
 // Dashboard: data polling and wiring.
 
+// One place decides the status pill and banner for every source: online demo, demo team,
+// Grok Bot box (internal mode), event log or the Grok Bot app cache.
+function paintSource() {
+  const pill = $("#connection");
+  const banner = $("#banner");
+  const source = S.office.source || {};
+  const privacy = S.office.privacy ? `${esc(t("banner.privacy"))} <a href="settings.html">${t("banner.settings")}</a>` : "";
+  let status = S.office.appOnline ? "ok" : "offline";
+  let label = S.office.appOnline ? t("pill.online") : t("pill.offline");
+  let note = privacy;
+  if (STATIC) {
+    [status, label] = ["demo", t("pill.static")];
+    note = `${esc(t("banner.static"))} <a href="${esc(STATIC.repo)}" target="_blank" rel="noopener">${t("banner.repo")}</a>`;
+  } else if (source.demo) {
+    [status, label] = ["demo", t("pill.demo")];
+    note = `${esc(t(S.settings.dataSource === "demo" ? "banner.demo" : "banner.demoAuto"))} <a href="settings.html#data">${t("banner.settings")}</a>`;
+  } else if (source.box) {
+    [status, label] = ["ok", t("pill.box")];
+    if (source.empty) note = esc(t("box.empty"));
+  } else if (source.kind === "events") {
+    label = S.office.appOnline ? t("pill.events") : t("pill.eventsQuiet");
+  }
+  pill.dataset.status = status;
+  pill.textContent = label;
+  banner.hidden = !note;
+  banner.innerHTML = note;
+}
 async function refreshOffice() {
   try {
-    S.office = await getJson(`api/office?lang=${S.lang}`);
-    const pill = $("#connection");
-    const source = S.office.source;
-    pill.dataset.status = source.demo ? "demo" : S.office.appOnline ? "ok" : "offline";
-    pill.textContent = STATIC ? t("pill.static") : source.demo ? t("pill.demo") : S.office.appOnline ? t("pill.online") : t("pill.offline");
-    const banner = $("#banner");
-    banner.hidden = !source.demo && !S.office.privacy;
-    banner.innerHTML = STATIC
-      ? `${esc(t("banner.static"))} <a href="${esc(STATIC.repo)}" target="_blank" rel="noopener">${t("banner.repo")}</a>`
-      : source.demo
-      ? `${esc(t(S.settings.dataSource === "demo" ? "banner.demo" : "banner.demoAuto"))} <a href="settings.html#data">${t("banner.settings")}</a>`
-      : S.office.privacy ? `${esc(t("banner.privacy"))} <a href="settings.html">${t("banner.settings")}</a>` : "";
+    S.office = await getJson(withBox(`api/office?lang=${S.lang}`));
+    paintSource();
     renderStage();
     renderHero();
     renderRoster();
@@ -27,7 +44,7 @@ async function refreshOffice() {
 async function refreshFlows() {
   try {
     const hours = S.hours;
-    const data = await getJson(`api/flows?hours=${hours}&lang=${S.lang}`);
+    const data = await getJson(withBox(`api/flows?hours=${hours}&lang=${S.lang}`));
     if (hours !== S.hours) return;
     const fresh = newSteps(data);
     S.flows = data;
@@ -47,7 +64,7 @@ async function refreshFlows() {
 async function refreshInsights() {
   try {
     const first = !S.insights;
-    S.insights = await getJson(`api/insights?lang=${S.lang}`);
+    S.insights = await getJson(withBox(`api/insights?lang=${S.lang}`));
     renderHero();
     renderAwards();
     renderFeed();
@@ -88,6 +105,7 @@ function renderAll() {
   renderBottleneck();
   renderBell();
   renderTV();
+  if (typeof renderInternal === "function") renderInternal();
   if (S.replay) {
     showFlowDetail(S.replay.flow);
     paintReplay();
@@ -98,6 +116,10 @@ function renderAll() {
 const seenSteps = new Set();
 let seeded = false;
 let staticLoop = -1;
+function resetLive() {
+  seenSteps.clear();
+  seeded = false;
+}
 function newSteps(data) {
   const fresh = [];
   // The online demo loops its recording; start over quietly when it wraps around.
@@ -357,8 +379,11 @@ addEventListener("resize", () => {
     document.body.classList.add("static-demo");
     $("#tv-link").href = "?tv=1";
   }
+  if (typeof initDataMode === "function") await initDataMode();
   await refreshOffice();
-  await Promise.all([refreshFlows(), refreshInsights(), refreshAlerts()]);
+  const jobs = [refreshFlows(), refreshInsights(), refreshAlerts()];
+  if (S.dataMode === "internal" && typeof refreshInternal === "function") jobs.push(refreshInternal());
+  await Promise.all(jobs);
   initTV();
   renderTV();
   openFlowFromHash();
@@ -367,5 +392,6 @@ addEventListener("resize", () => {
   setInterval(refreshFlows, Math.max(every * 2, 8000));
   setInterval(refreshInsights, 15000);
   setInterval(refreshAlerts, Math.max(every, 5000));
+  setInterval(() => { if (S.dataMode === "internal") refreshInternal(); }, 20000);
   setInterval(rotateHeadline, 6000);
 })();

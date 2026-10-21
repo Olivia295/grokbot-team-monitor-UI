@@ -272,7 +272,8 @@ class AlertWatcher:
             self.seen.clear()
             return []
         # Switching a kind on should not replay everything that already matched: start a new baseline.
-        signature = "|".join(str(config.get(key)) for key in (*KINDS, "stuckMinutes"))
+        signature = "|".join([str(config.get(key)) for key in (*KINDS, "stuckMinutes")]
+                             + [str(settings.get(key)) for key in ("readMode", "dataSource", "eventsPath", "supportDir")])
         if signature != self.signature:
             self.signature = signature
             self.baseline = False

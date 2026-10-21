@@ -11,14 +11,18 @@ from __future__ import annotations
 
 import argparse
 import errno
+import hmac
 import json
 import os
+import re
+import secrets
 import sys
 import threading
 import webbrowser
+from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend"
@@ -26,18 +30,35 @@ FRONTEND = ROOT / "frontend"
 try:  # installed package (pipx, uvx, Homebrew) or python -m backend.server
     from .alerts import AlertWatcher
     from .events import append_events
+    from .internal_box import BoxError, PrivacyError, build, mode_status
     from .settings import SettingsError, load_settings, save_settings, settings_path
-    from .views import flows_view, ingest_path, insights_view, office_view
+    from .views import flows_view, ingest_path, insights_view, office_view, use_box
 except ImportError:  # python3 backend/server.py from a checkout
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
     from backend.alerts import AlertWatcher
     from backend.events import append_events
+    from backend.internal_box import BoxError, PrivacyError, build, mode_status
     from backend.settings import SettingsError, load_settings, save_settings, settings_path
-    from backend.views import flows_view, ingest_path, insights_view, office_view
+    from backend.views import flows_view, ingest_path, insights_view, office_view, use_box
 
 HOST = "127.0.0.1"
 PORT = 19200
+LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+COOKIE = "bot_office_token"
+# Only used for hosts in BOT_OFFICE_ALLOWED_HOSTS. Set BOT_OFFICE_TOKEN to keep it across restarts.
+TOKEN = os.environ.get("BOT_OFFICE_TOKEN", "").strip() or secrets.token_urlsafe(18)
+TOKEN_PAGE = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bot Office</title><body style="font:15px/1.6 -apple-system,sans-serif;max-width:560px;margin:15vh auto;padding:0 20px">
+<h1 style="font-size:20px">Bot Office · Bot协作室</h1>
+<p>This address is not this computer, so Bot Office asks for its access link. Open the link with <code>?token=…</code>
+that the server printed when it started.</p>
+<p>这个地址不是本机，需要访问链接才能打开。请使用后台启动时打印出来、带 <code>?token=…</code> 的链接。</p></body>"""
+
+
+def allowed_hosts() -> set[str]:
+    """Extra host names (besides loopback) the page may be opened from, e.g. the Grok Bot box's proxy."""
+    return {name.strip().lower() for name in os.environ.get("BOT_OFFICE_ALLOWED_HOSTS", "").split(",") if name.strip()}
 VERSION = "0.4.0"
 WATCHER = AlertWatcher()
 WINDOWS = {24, 168, 720}
@@ -56,16 +77,56 @@ MIME = {
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:
         if not self.path.startswith("/api/"):
-            sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
+            line = re.sub(r"token=[^&\s\"]+", "token=…", fmt % args)
+            sys.stderr.write("%s - %s\n" % (self.address_string(), line))
+
+    def _hostname(self) -> str:
+        try:
+            return (urlsplit("//" + self.headers.get("Host", "")).hostname or "").lower()
+        except ValueError:
+            return ""
+
+    def _remote(self) -> bool:
+        """Reached through a name in BOT_OFFICE_ALLOWED_HOSTS (a tunnel or the box's proxy)."""
+        return self._hostname() not in LOOPBACK and self._hostname() in allowed_hosts()
+
+    def _authorized(self) -> bool:
+        """Loopback is trusted. Any other allowed host needs the access token (cookie or bearer)."""
+        if not self._remote():
+            return True
+        bearer = self.headers.get("Authorization", "")
+        if bearer.startswith("Bearer ") and hmac.compare_digest(bearer[7:].strip(), TOKEN):
+            return True
+        try:
+            morsel = SimpleCookie(self.headers.get("Cookie", "")).get(COOKIE)
+        except CookieError:
+            return False
+        return bool(morsel) and hmac.compare_digest(morsel.value, TOKEN)
 
     def _local(self) -> bool:
         host = self.headers.get("Host", "")
         origin = self.headers.get("Origin")
-        try:
-            hostname = urlsplit("//" + host).hostname
-        except ValueError:
+        hostname = self._hostname()
+        if hostname in LOOPBACK:
+            return not origin or origin == "http://" + host
+        if hostname in allowed_hosts():
+            return (not origin or origin in ("http://" + host, "https://" + host)) and self._authorized()
+        return False
+
+    def _token_login(self, url) -> bool:
+        """``?token=…`` on an allowed host: store it as a cookie and drop it from the address."""
+        query = parse_qs(url.query, max_num_fields=8)
+        given = (query.pop("token", None) or [""])[0]
+        if not self._remote() or not given or not hmac.compare_digest(given, TOKEN):
             return False
-        return hostname in {"127.0.0.1", "localhost", "::1"} and (not origin or origin == "http://" + host)
+        rest = urlencode({key: values[0] for key, values in query.items()})
+        secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "") == "https" else ""
+        self.send_response(302)
+        self.send_header("Location", url.path + (f"?{rest}" if rest else ""))
+        self.send_header("Set-Cookie", f"{COOKIE}={TOKEN}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000{secure}")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+        return True
 
     def do_GET(self) -> None:
         url = urlsplit(self.path)
@@ -73,25 +134,33 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/health":
             self._json({"ok": True, "version": VERSION})
             return
+        if self._token_login(url):
+            return
         if path.startswith("/api/"):
+            if self._remote() and not self._authorized():
+                self._json({"error": "token required", "tokenRequired": True}, status=401)
+                return
             if not self._local():
                 self._json({"error": "请从本机打开Bot协作室。"}, status=403)
                 return
-            query = parse_qs(url.query, max_num_fields=4)
+            query = parse_qs(url.query, max_num_fields=8)
             settings = load_settings()
             # With language "auto", only the page knows the browser language; demo names follow it.
             if settings.get("language") == "auto" and query.get("lang", [""])[0] in ("zh", "en"):
                 settings["language"] = query["lang"][0]
+            # ?box=1 / ?box=0 overrides the read-mode setting for one request.
+            box_arg = (query.get("box") or [""])[0]
+            box = True if box_arg == "1" else False if box_arg == "0" else None
             if path == "/api/office":
-                self._json(office_view(settings))
+                self._json(office_view(settings, box=box))
             elif path == "/api/insights":
-                self._json(insights_view(settings))
+                self._json(insights_view(settings, box=box))
             elif path == "/api/flows":
                 try:
                     hours = int(query.get("hours", ["24"])[0])
                 except ValueError:
                     hours = 24
-                self._json(flows_view(hours if hours in WINDOWS else 24, settings))
+                self._json(flows_view(hours if hours in WINDOWS else 24, settings, box=box))
             elif path == "/api/settings":
                 settings = load_settings()
                 # Read-only facts for the settings page; dropped again when settings are saved.
@@ -99,8 +168,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(settings)
             elif path == "/api/alerts":
                 self._json({"enabled": bool(load_settings()["alerts"]["enabled"]), "alerts": WATCHER.snapshot()})
+            elif path == "/api/mode":
+                settings = load_settings()
+                status = mode_status()
+                status.update(setting=settings.get("readMode", "auto"),
+                              mode="internal" if use_box(settings, None) else "external")
+                self._json(status)
+            elif path == "/api/internal":
+                self._internal()
             else:
                 self.send_error(404)
+            return
+        if self._remote() and not self._authorized() and (path in ("/", "/settings", "/tv") or path.endswith(".html")):
+            self._html(401, TOKEN_PAGE)
             return
         if path == "/":
             path = "/index.html"
@@ -137,6 +217,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlsplit(self.path).path
+        if self._remote() and not self._authorized():
+            self._json({"error": "token required", "tokenRequired": True}, status=401)
+            return
         if path == "/api/events":
             # Scripts on this machine (no Origin header) or the local page may append events.
             if not self._local():
@@ -180,6 +263,27 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._json(saved)
 
+    def _internal(self) -> None:
+        status = mode_status()
+        if not status["internal_available"]:
+            self._json({"error": status["reason"], "internal_available": False}, status=403)
+            return
+        try:
+            payload = build()
+        except (BoxError, PrivacyError, OSError, ValueError):
+            self._json({"error": "internal data unavailable"}, status=500)
+            return
+        self._json(payload)
+
+    def _html(self, status: int, body: str) -> None:
+        data = body.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def _json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -215,6 +319,8 @@ def main() -> None:
     mode = "  (demo)" if args.demo else f"  (events: {os.environ['GROK_COLLAB_EVENTS']})" if args.events else ""
     print(f"Bot Office {VERSION}  {url}{mode}", flush=True)
     print("Press Ctrl+C to stop.", flush=True)
+    for name in sorted(allowed_hosts()):
+        print(f"Also allowed as {name}. Open it once with ?token={TOKEN} (it is kept as a cookie).", flush=True)
     WATCHER.base_url = url
     WATCHER.start()
     if args.open:

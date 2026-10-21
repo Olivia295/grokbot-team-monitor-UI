@@ -58,6 +58,9 @@
 
       <section class="card set-section local-only" id="data">
         <h2 data-i18n="set.data"></h2>
+        <div class="field"><label for="readModeSel" data-i18n="set.readMode"></label>
+          <select id="readModeSel" data-setting="readMode"><option value="auto" data-i18n="opt.readAuto"></option><option value="internal" data-i18n="mode.internal"></option><option value="external" data-i18n="mode.external"></option></select>
+          <p class="hint" id="read-mode-hint"></p></div>
         <div class="field"><label for="sourceSel" data-i18n="set.source"></label>
           <select id="sourceSel" data-setting="dataSource"><option value="auto" data-i18n="opt.sourceAuto"></option><option value="grok" data-i18n="opt.sourceGrok"></option><option value="events" data-i18n="opt.sourceEvents"></option><option value="demo" data-i18n="opt.sourceDemo"></option></select></div>
         <div class="field"><label for="supportDir" data-i18n="set.folder"></label>

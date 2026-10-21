@@ -46,7 +46,7 @@ for (const control of $$("[data-setting]")) {
     if (control.hasAttribute("data-number")) value = Number(value);
     await save({ [key]: value });
     if (key === "language") render();
-    if (["dataSource", "supportDir", "eventsPath", "language"].includes(key)) await loadOffice();
+    if (["readMode", "dataSource", "supportDir", "eventsPath", "language"].includes(key)) await Promise.all([loadOffice(), loadMode()]);
   });
 }
 
@@ -63,6 +63,20 @@ async function loadOffice() {
   renderPicker();
   if (editing) renderEditor();
 }
+let boxMode = null;
+async function loadMode() {
+  const result = await fetchJson("api/mode");
+  boxMode = result.ok ? result.data : null;
+  renderReadMode();
+}
+function renderReadMode() {
+  const available = Boolean(boxMode?.internal_available);
+  const internal = $('#readModeSel option[value="internal"]');
+  if (internal) internal.disabled = !available;
+  $("#read-mode-hint").textContent = available
+    ? t("set.readModeOn", { mode: t(boxMode.mode === "internal" ? "mode.internal" : "mode.external") })
+    : t("mode.unavailable");
+}
 function renderSource() {
   const node = $("#source-status");
   const meta = S.settings._meta || {};
@@ -73,6 +87,10 @@ function renderSource() {
     return;
   }
   const source = office.source;
+  if (source.box) {
+    node.innerHTML = `🗄 ${esc(t(source.empty ? "box.empty" : "set.statusBox", { n: office.roster.length }))}`;
+    return;
+  }
   if (source.kind !== "events") $("#supportDir").placeholder = source.supportDir || t("set.folderAuto");
   node.innerHTML = source.demo
     ? `🧪 ${esc(t(STATIC ? "set.statusStatic" : "set.statusDemo"))}`
@@ -357,6 +375,7 @@ $("#resetLook").addEventListener("click", async () => {
 
 function render() {
   fillControls();
+  if (boxMode) renderReadMode();
   fillAlerts();
   renderTVLinks();
   renderSource();
@@ -376,6 +395,6 @@ function render() {
   renderTVLinks();
   const match = location.hash.match(/^#bot=(.+)$/);
   if (match) editing = decodeURIComponent(match[1]);
-  await loadOffice();
+  await Promise.all([loadOffice(), loadMode()]);
   if (editing) setTimeout(() => $("#bots").scrollIntoView({ block: "start" }), 50);
 })();

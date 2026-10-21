@@ -11,11 +11,13 @@ import os
 import time
 from pathlib import Path
 
+from .box_source import load_box_cache
 from .collab import flows_from, office_from
 from .demo import demo_cache
 from .events import event_files, events_cache
 from .grok_cache import Cache, default_support_dir, load_cache
 from .insights import insights_from
+from .internal_box import mode_status
 from .settings import data_dir, load_settings
 
 MASK = "•••"
@@ -41,7 +43,27 @@ def ingest_path(settings: dict) -> Path:
     return data_dir() / "events.jsonl"
 
 
-def resolve_cache(settings: dict, now_ms: int) -> Cache:
+def use_box(settings: dict, box: bool | None = None) -> bool:
+    """Internal mode (reading the Grok Bot box itself).
+
+    An explicit ``?box=1`` / ``?box=0`` wins, then ``--demo`` / ``--events``, then the
+    read-mode setting: "internal", "external", or "auto" (internal whenever this
+    machine is a Grok Bot box). The page, alerts, the big screen and the menu-bar
+    app all go through here, so they always agree on the source.
+    """
+    if box is not None:
+        return box
+    if os.environ.get("GROK_COLLAB_DEMO") == "1" or os.environ.get("GROK_COLLAB_EVENTS", "").strip():
+        return False
+    if settings.get("readMode", "auto") == "external":
+        return False
+    return bool(mode_status()["internal_available"])
+
+
+def resolve_cache(settings: dict, now_ms: int, box: bool | None = None) -> Cache:
+    # Internal mode reads the box. It never substitutes the built-in demo team.
+    if use_box(settings, box):
+        return load_box_cache()
     if os.environ.get("GROK_COLLAB_DEMO") == "1":
         source = "demo"
     elif os.environ.get("GROK_COLLAB_EVENTS", "").strip():
@@ -66,18 +88,24 @@ def resolve_cache(settings: dict, now_ms: int) -> Cache:
 
 
 def _source(cache: Cache) -> dict:
-    return {"demo": cache.demo, "kind": cache.source, "supportDir": "" if cache.demo else str(cache.support),
-            "found": bool(cache.roster)}
+    return {
+        "demo": bool(cache.demo),
+        "kind": cache.source,
+        "box": bool(cache.box),
+        "empty": bool(cache.box and cache.empty),
+        "supportDir": "" if cache.demo else str(cache.support),
+        "found": bool(cache.roster),
+    }
 
 
 def _bot(settings: dict, bot_id: str) -> dict:
     return settings.get("bots", {}).get(bot_id, {})
 
 
-def office_view(settings: dict | None = None, now_ms: int | None = None) -> dict:
+def office_view(settings: dict | None = None, now_ms: int | None = None, box: bool | None = None) -> dict:
     settings = settings or load_settings()
     now_ms = now_ms or _now()
-    cache = resolve_cache(settings, now_ms)
+    cache = resolve_cache(settings, now_ms, box=box)
     office = office_from(cache, now_ms)
     rooms = settings.get("rooms", {})
     hidden_rooms = {room_id for room_id, room in rooms.items() if room.get("hidden")}
@@ -112,10 +140,10 @@ def office_view(settings: dict | None = None, now_ms: int | None = None) -> dict
             "source": _source(cache), "privacy": bool(settings.get("privacy"))}
 
 
-def flows_view(hours: int, settings: dict | None = None, now_ms: int | None = None) -> dict:
+def flows_view(hours: int, settings: dict | None = None, now_ms: int | None = None, box: bool | None = None) -> dict:
     settings = settings or load_settings()
     now_ms = now_ms or _now()
-    cache = resolve_cache(settings, now_ms)
+    cache = resolve_cache(settings, now_ms, box=box)
     data = flows_from(cache, now_ms, hours)
     names = {row["id"]: row.get("name") or "" for row in cache.roster}
     # Bots hidden from the office still take part in flows; show them under their alias.
@@ -137,10 +165,10 @@ def flows_view(hours: int, settings: dict | None = None, now_ms: int | None = No
     return data
 
 
-def insights_view(settings: dict | None = None, now_ms: int | None = None) -> dict:
+def insights_view(settings: dict | None = None, now_ms: int | None = None, box: bool | None = None) -> dict:
     settings = settings or load_settings()
     now_ms = now_ms or _now()
-    cache = resolve_cache(settings, now_ms)
+    cache = resolve_cache(settings, now_ms, box=box)
     data = insights_from(cache, now_ms)
     hidden = {bot_id for bot_id, bot in settings.get("bots", {}).items() if bot.get("hidden")}
     for profile in data["profiles"]:
