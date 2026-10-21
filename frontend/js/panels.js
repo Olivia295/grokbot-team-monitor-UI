@@ -197,6 +197,8 @@ function showFlowDetail(flow) {
 function stepBadges(step) {
   if (step.kind !== "handoff") return "";
   const badges = [];
+  // Box reading knows whether the receiver answered even when the text is hidden (Willow Mage).
+  if (typeof step.replied === "boolean") badges.push(`<span class="badge ${step.replied ? "" : "slow"}">${t(step.replied ? "handoff.replied" : "handoff.noreply")}</span>`);
   if (step.waitMs != null) badges.push(`<span class="badge ${step.waitMs > 3 * 60e3 ? "slow" : ""}">⏱ ${t("detail.waited", { t: span(step.waitMs) })}</span>`);
   if (step.failed) badges.push(`<span class="badge warn">⚠ ${t("detail.failed")}</span>`);
   if (step.retry) badges.push(`<span class="badge">↻ ${t("detail.retry")}</span>`);

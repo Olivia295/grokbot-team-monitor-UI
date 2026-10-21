@@ -123,5 +123,16 @@ class BoxDatesTest(unittest.TestCase):
         self.assertEqual(count_recent_log_lines(text, date(2027, 1, 4)), 2)
 
 
+
+class WillowAlertTest(unittest.TestCase):
+    def test_alerts_never_carry_the_willow_placeholder(self):
+        from backend.alerts import render
+        from backend.box_source import WILLOW_HIDDEN
+        item = {"kind": "stuck", "params": {"to": "Willow Mage", "sender": "Grok Bot", "minutes": 12}, "text": WILLOW_HIDDEN}
+        title, body = render(item, "en")
+        self.assertEqual(title, "Willow Mage hasn't picked up Grok Bot's handoff")
+        self.assertEqual(body, "Waiting for 12 min")
+
+
 if __name__ == "__main__":
     unittest.main()

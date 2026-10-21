@@ -309,8 +309,14 @@ function detailText(agent) {
   if (!agent) return "";
   return t(`detail.${agent.detail || "idle"}`, { name: agent.detailParam || t("who.teammate") });
 }
+const WILLOW_PLACEHOLDERS = new Set(["（Willow 内容不显示）", "(Willow content hidden)"]);
+function isWillowPlaceholder(text) {
+  return WILLOW_PLACEHOLDERS.has(text);
+}
 function masked(text) {
-  return text === "•••" ? t("privacy.hidden") : text;
+  if (text === "•••") return t("privacy.hidden");
+  if (isWillowPlaceholder(text)) return t("willow.hidden");
+  return text;
 }
 
 // Game-style level from everything a bot has produced: each level needs a bit more than the last.

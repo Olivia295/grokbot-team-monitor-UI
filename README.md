@@ -228,10 +228,10 @@ Bot Office can also run **inside the Grok Bot box** (the machine your bots work 
 | Coverage | Every bot in the message index, including ones you haven't opened lately | Bots whose transcripts the app has cached |
 | Extra panel | Work status from folder activity, recent tasks from each bot's log, mention/dispatch edges, an activity **estimate** | — |
 | Weekly quota | Not available on the box (the panel says so) | **Real** percentage, plan and reset date |
-| Message text | Short handoff titles only. Your own messages keep only time and recipient | Full text (hide it with privacy mode) |
+| Message text | Short handoff titles only (none for Willow Mage). Your own messages keep only time and recipient | Full text (hide it with privacy mode) |
 
 - **When it switches on**: internal reading is available when both `/workspace/roster.md` and `/home/box/agent-data` exist. `BOT_OFFICE_INTERNAL=1` forces it on and `=0` forces it off. With **Settings → Data source → Reading mode** on *Automatic*, the box is read whenever it's available. The header switch saves your choice for the page, alerts, the big screen and the menu-bar app together. Off the box, the internal option is disabled and `/api/internal` answers 403.
-- **What it never reads**: Notion Nexus `inbox` / `snapshots` / `raw`, `~/.codex`, `~/.grok`, `auth.json`, anything with `token` in its name, `*.env`, and files named 周记 / 日记. Willow Mage shows only its name and "not monitored". Handoff titles that look personal are replaced with "(hidden)". The SQLite index is opened read-only (`mode=ro`).
+- **What it never reads**: Notion Nexus `inbox` / `snapshots` / `raw`, `~/.codex`, `~/.grok`, `auth.json`, anything with `token` in its name, `*.env`, and files named 周记 / 日记. Willow Mage appears like the other bots but as work metadata only: whether she's working, when she was last active, how many messages, and whether a handoff to or from her was answered. Her message bodies are never selected from the index, her folder and duty text are never read, and anything she wrote or was sent shows as "(Willow content hidden)" everywhere, including alerts, replays, GIFs and reports. Other handoff titles that look personal are replaced with "(hidden)". The SQLite index is opened read-only (`mode=ro`).
 - **No demo stand-ins**: with no records yet, the box view says "No box collaboration records yet" instead of showing the demo team.
 
 ### Opening the box's office from elsewhere
