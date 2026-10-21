@@ -236,7 +236,9 @@ Bot Office can also run **inside the Grok Bot box** (the machine your bots work 
 
 ### Opening the box's office from elsewhere
 
-The server only listens on `127.0.0.1`. If the box exposes it through a proxy or tunnel, list that host name in `BOT_OFFICE_ALLOWED_HOSTS` (comma-separated). Requests through those names need an access token: the server prints a link with `?token=…` when it starts. Open it once and the token is kept as a cookie. Scripts can send `Authorization: Bearer <token>` instead. Set `BOT_OFFICE_TOKEN` to keep the same token across restarts. Without the token, the page and API refuse, so the box's data stays private even when the address is reachable.
+The server only listens on `127.0.0.1`. If the box exposes it through a proxy or tunnel (for example Tailscale, as `http://grok-bot:19200`), list that host name in `BOT_OFFICE_ALLOWED_HOSTS` (comma-separated), and the page opens there directly.
+
+Anyone who can reach that address can see the box's data. On your own Tailscale network that's usually just your devices. To lock it down further, set `BOT_OFFICE_TOKEN` to a long random string. Requests through the allowed names then need it once: open the page with `?token=…` and it's kept as a cookie, or have scripts send `Authorization: Bearer <token>`. Opening it from the box itself (or through an SSH tunnel to `127.0.0.1`) never needs a token.
 
 ## Settings & customization
 
@@ -300,7 +302,7 @@ The [online demo](https://olivia295.github.io/grokbot-teamwork-UI/) is the same 
 
 ### Privacy & security
 
-- The server binds to `127.0.0.1` only and rejects API calls from other hosts or origins. Settings and test alerts can only be posted by the page itself, and events only by local scripts or the page.
+- The server binds to `127.0.0.1` only and rejects API calls from other hosts or origins, except host names you list in `BOT_OFFICE_ALLOWED_HOSTS` (optionally protected with `BOT_OFFICE_TOKEN`). Settings and test alerts can only be posted by the page itself, and events only by local scripts or the page.
 - It only reads Grok Bot's cache, never writes to it, and calls no outside service, except the alert webhooks you add yourself.
 - Settings are written only to your settings file.
 - In privacy mode, message text is replaced on the server before it ever reaches the page or an alert.

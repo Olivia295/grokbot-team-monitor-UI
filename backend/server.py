@@ -15,7 +15,6 @@ import hmac
 import json
 import os
 import re
-import secrets
 import sys
 import threading
 import webbrowser
@@ -46,8 +45,9 @@ HOST = "127.0.0.1"
 PORT = 19200
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 COOKIE = "bot_office_token"
-# Only used for hosts in BOT_OFFICE_ALLOWED_HOSTS. Set BOT_OFFICE_TOKEN to keep it across restarts.
-TOKEN = os.environ.get("BOT_OFFICE_TOKEN", "").strip() or secrets.token_urlsafe(18)
+# Optional. When BOT_OFFICE_TOKEN is set, hosts in BOT_OFFICE_ALLOWED_HOSTS also need it
+# (open the page once with ?token=…). Without it, those hosts are let in like before.
+TOKEN = os.environ.get("BOT_OFFICE_TOKEN", "").strip()
 TOKEN_PAGE = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Bot Office</title><body style="font:15px/1.6 -apple-system,sans-serif;max-width:560px;margin:15vh auto;padding:0 20px">
 <h1 style="font-size:20px">Bot Office · Bot协作室</h1>
@@ -91,8 +91,8 @@ class Handler(BaseHTTPRequestHandler):
         return self._hostname() not in LOOPBACK and self._hostname() in allowed_hosts()
 
     def _authorized(self) -> bool:
-        """Loopback is trusted. Any other allowed host needs the access token (cookie or bearer)."""
-        if not self._remote():
+        """Loopback is trusted. Other allowed hosts need the access token only when one is set."""
+        if not self._remote() or not TOKEN:
             return True
         bearer = self.headers.get("Authorization", "")
         if bearer.startswith("Bearer ") and hmac.compare_digest(bearer[7:].strip(), TOKEN):
@@ -117,7 +117,7 @@ class Handler(BaseHTTPRequestHandler):
         """``?token=…`` on an allowed host: store it as a cookie and drop it from the address."""
         query = parse_qs(url.query, max_num_fields=8)
         given = (query.pop("token", None) or [""])[0]
-        if not self._remote() or not given or not hmac.compare_digest(given, TOKEN):
+        if not TOKEN or not self._remote() or not given or not hmac.compare_digest(given, TOKEN):
             return False
         rest = urlencode({key: values[0] for key, values in query.items()})
         secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "") == "https" else ""
@@ -320,7 +320,10 @@ def main() -> None:
     print(f"Bot Office {VERSION}  {url}{mode}", flush=True)
     print("Press Ctrl+C to stop.", flush=True)
     for name in sorted(allowed_hosts()):
-        print(f"Also allowed as {name}. Open it once with ?token={TOKEN} (it is kept as a cookie).", flush=True)
+        if TOKEN:
+            print(f"Also allowed as {name}. Open it once with ?token={TOKEN} (it is kept as a cookie).", flush=True)
+        else:
+            print(f"Also allowed as {name} (no access token; set BOT_OFFICE_TOKEN to require one).", flush=True)
     WATCHER.base_url = url
     WATCHER.start()
     if args.open:

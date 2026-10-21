@@ -60,6 +60,9 @@ class RemoteHostTest(unittest.TestCase):
     def setUpClass(cls):
         cls.saved = os.environ.get("BOT_OFFICE_ALLOWED_HOSTS")
         os.environ["BOT_OFFICE_ALLOWED_HOSTS"] = "box.example"
+        # The token is opt-in (BOT_OFFICE_TOKEN); these tests switch it on.
+        cls.token = mock.patch("backend.server.TOKEN", "test-token-9f3a")
+        cls.token.start()
         cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
         cls.httpd.daemon_threads = True
         cls.port = cls.httpd.server_address[1]
@@ -69,6 +72,7 @@ class RemoteHostTest(unittest.TestCase):
     def tearDownClass(cls):
         cls.httpd.shutdown()
         cls.httpd.server_close()
+        cls.token.stop()
         os.environ.pop("BOT_OFFICE_ALLOWED_HOSTS", None)
         if cls.saved is not None:
             os.environ["BOT_OFFICE_ALLOWED_HOSTS"] = cls.saved
@@ -81,6 +85,13 @@ class RemoteHostTest(unittest.TestCase):
         result = (response.status, data, dict(response.getheaders()))
         conn.close()
         return result
+
+    def test_allowed_host_works_without_a_token_by_default(self):
+        with mock.patch("backend.server.TOKEN", ""):
+            status, body, _ = self.request("/api/mode", {"Host": "box.example"})
+            self.assertEqual(status, 200)
+            self.assertEqual(self.request("/", {"Host": "box.example"})[0], 200)
+            self.assertEqual(self.request("/api/mode", {"Host": "evil.example"})[0], 403)
 
     def test_allowed_host_needs_the_token(self):
         status, body, _ = self.request("/api/mode", {"Host": "box.example"})
