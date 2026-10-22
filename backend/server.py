@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Bot Office server. Local only: binds to 127.0.0.1 and refuses foreign Host/Origin.
 
-    python3 backend/server.py                      # http://127.0.0.1:19200
+    python3 backend/server.py                      # http://127.0.0.1:8080
     python3 backend/server.py --demo               # always show the demo team
     python3 backend/server.py --events runs.jsonl  # any multi-agent system, see docs/events.md
-    python3 backend/server.py --port 8080 --open
+    python3 backend/server.py --port 8081 --open
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ FRONTEND = ROOT / "frontend"
 try:  # installed package (pipx, uvx, Homebrew) or python -m backend.server
     from .alerts import AlertWatcher
     from .events import append_events
+    from .host_status import collect as collect_host_status
     from .internal_box import BoxError, PrivacyError, build, mode_status
     from .settings import SettingsError, load_settings, save_settings, settings_path
     from .views import flows_view, ingest_path, insights_view, office_view, use_box
@@ -37,12 +38,13 @@ except ImportError:  # python3 backend/server.py from a checkout
         sys.path.insert(0, str(ROOT))
     from backend.alerts import AlertWatcher
     from backend.events import append_events
+    from backend.host_status import collect as collect_host_status
     from backend.internal_box import BoxError, PrivacyError, build, mode_status
     from backend.settings import SettingsError, load_settings, save_settings, settings_path
     from backend.views import flows_view, ingest_path, insights_view, office_view, use_box
 
 HOST = "127.0.0.1"
-PORT = 19200
+PORT = 8080
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 COOKIE = "bot_office_token"
 # Optional. When BOT_OFFICE_TOKEN is set, hosts in BOT_OFFICE_ALLOWED_HOSTS also need it
@@ -177,6 +179,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(status)
             elif path == "/api/internal":
                 self._internal()
+            elif path == "/api/host-status":
+                self._host_status()
             else:
                 self.send_error(404)
             return
@@ -275,6 +279,12 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "internal data unavailable"}, status=500)
             return
         self._json(payload)
+
+    def _host_status(self) -> None:
+        try:
+            self._json(collect_host_status())
+        except (OSError, ValueError):
+            self._json({"error": "host status unavailable"}, status=500)
 
     def _html(self, status: int, body: str) -> None:
         data = body.encode("utf-8")

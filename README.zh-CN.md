@@ -115,7 +115,7 @@ cd grokbot-teamwork-UI
 ./start.sh
 ```
 
-浏览器会自动打开 <http://127.0.0.1:19200>。
+浏览器会自动打开 <http://127.0.0.1:8080>。
 
 | 系统 | 最简单的方式 |
 | --- | --- |
@@ -144,7 +144,7 @@ uvx --from git+https://github.com/Olivia295/grokbot-teamwork-UI.git bot-office -
 ```bash
 bot-office --demo                   # 只用演示团队：截图、试用、没装 Grok Bot
 bot-office --events runs.jsonl      # 读取其他 agent 系统的事件日志（见下文）
-bot-office --port 8080              # 换端口
+bot-office --port 8081              # 换端口
 bot-office --open --tv              # 直接打开大屏模式
 ```
 
@@ -258,7 +258,7 @@ Bot协作室默认在这些位置找 Grok Bot 的数据：
 ```bash
 bot-office --events runs.jsonl --open
 # 或者实时推给正在运行的办公室：
-curl -X POST http://127.0.0.1:19200/api/events -H 'Content-Type: application/json' \
+curl -X POST http://127.0.0.1:8080/api/events -H 'Content-Type: application/json' \
   -d '{"type":"handoff","from":"planner","to":"coder","text":"修一下登录 bug"}'
 ```
 
@@ -279,13 +279,14 @@ Bot协作室也可以直接跑在 **Grok Bot 本机**（bot 们干活的那台�
 | 消息内容 | 只保留简短的交接标题；你自己的消息只留时间和对象 | 完整内容（可用隐私模式隐藏） |
 
 - **什么时候启用**：`/workspace/roster.md` 和 `/home/box/agent-data` 都存在时就会本机读取；`BOT_OFFICE_INTERNAL=1` 强制打开，`=0` 强制关闭。页面、提醒、大屏和菜单栏小程序读的都是同一个来源。不在本机时，`/api/internal` 返回 403。
+- **本机状态**：本机页面最上方是原来的 grok-bot status 看板（运行时间、负载、内存、磁盘、监听中的服务、tailnet 设备），只读采集，数据和旧的 `127.0.0.1:8080` 看板一致。
 - **本机面板**：每个 bot 的文件最后改动时间（今天 / 3 天内 / 更早）、7 天改动文件数、日志里的最近任务，以及近 7 天发出和收到的消息条数。计数用的是 `COUNT(*)` 查询，从不读取消息正文。
 - **永远不读的东西**：Notion Nexus 的 `inbox` / `snapshots` / `raw`、`~/.codex`、`~/.grok`、`auth.json`、名字里带 `token` 的文件、`*.env`，以及名字里有「周记」「日记」的文件。Willow Mage 只显示名字和「不监控」。看起来涉及个人情绪的交接标题会显示成「（内容已隐藏）」。SQLite 索引以只读方式（`mode=ro`）打开。
 - **不拿演示数据凑数**：还没有记录时，本机模式显示「本机暂无协作记录」，不会换成演示团队。
 
 ### 从别的地方打开本机的办公室
 
-后台只监听 `127.0.0.1`。如果 Grok Bot 本机通过代理或隧道把它暴露出去（比如通过 Tailscale 用 `http://grok-bot:19200` 访问），把那个域名写进 `BOT_OFFICE_ALLOWED_HOSTS`（多个用逗号分隔），就能直接打开。
+后台只监听 `127.0.0.1`。如果 Grok Bot 本机通过代理或隧道把它暴露出去（比如通过 Tailscale 用 `http://grok-bot:8080` 访问），把那个域名写进 `BOT_OFFICE_ALLOWED_HOSTS`（多个用逗号分隔），就能直接打开。
 
 能访问这个地址的人都能看到本机数据。在你自己的 Tailscale 网络里，通常只有你自己的设备。想再收紧一点，可以把 `BOT_OFFICE_TOKEN` 设成一长串随机字符：之后通过这些域名访问时需要先出示一次令牌（用 `?token=…` 打开一次，会存进 cookie；脚本可以用 `Authorization: Bearer <token>`）。在盒子本机上打开，或者通过 SSH 隧道走 `127.0.0.1` 打开，永远不需要令牌。
 
@@ -364,6 +365,7 @@ backend/
   grok_cache.py  读取 Grok Bot 缓存，按系统找数据目录
   events.py      通用 JSONL 事件适配器 + POST /api/events
   internal_box.py  Grok Bot 本机：名册、bot 文件夹、工作状态、隐私规则
+  host_status.py   Grok Bot 本机：运行时间、负载、内存、磁盘、服务、tailnet
   box_source.py    Grok Bot 本机：消息索引 + 分派日志 → 协作流程
   collab.py      办公室状态、流程还原、瓶颈分析
   insights.py    档案、成就、动态、日报、作息
@@ -419,7 +421,7 @@ python3 examples/simulate_events.py --post --live   # 给运行中的办公室�
 <details>
 <summary><b>端口被占用</b></summary>
 
-运行 `bot-office --port 19201`（或 `python3 backend/server.py --port 19201`），或者关掉已经在运行的那一个。
+运行 `bot-office --port 8081`（或 `python3 backend/server.py --port 8081`），或者关掉已经在运行的那一个。
 </details>
 
 <details>

@@ -239,10 +239,96 @@ function usageCard(data) {
   </article>`;
 }
 
+function hostRetryHtml() {
+  return `<p class="muted">${esc(t("host.error"))} <button type="button" class="retry" id="host-retry">${esc(t("request.retry"))}</button></p>`;
+}
+
+function hostFactsCard(data) {
+  const rows = [
+    [t("host.uptime"), data.uptime && data.uptime.text],
+    [t("host.load"), (data.load || []).join(" ")],
+    [t("host.memory"), data.memory && data.memory.text],
+    [t("host.disk"), data.disk && data.disk.text],
+    [t("host.tailscale"), data.tailscale],
+  ].map(([label, value]) => `<tr><td>${esc(label)}</td><td>${esc(value || "—")}</td></tr>`).join("");
+  return `<article class="card internal-card host-status">
+    <table class="internal-table host-table host-facts"><tbody>${rows}</tbody></table>
+    ${hostServicesTable(data)}
+    ${hostPeersTable(data)}
+  </article>`;
+}
+
+function hostServicesTable(data) {
+  const head = ["service", "port", "status"].map((key) => `<th>${esc(t(`host.col.${key}`))}</th>`).join("");
+  const rows = (data.services || []).map((svc) => (
+    `<tr><td>${esc(svc.name)}</td><td>${esc(svc.port)}</td><td>${esc(svc.up ? t("host.up") : t("host.down"))}</td></tr>`
+  )).join("");
+  return `<h3>${esc(t("host.services"))}</h3>
+    <div class="table-scroll"><table class="internal-table host-table">
+      <thead><tr>${head}</tr></thead><tbody>${rows}</tbody>
+    </table></div>`;
+}
+
+function hostPeersTable(data) {
+  const head = ["host", "os", "online"].map((key) => `<th>${esc(t(`host.col.${key}`))}</th>`).join("");
+  const peers = data.peers || [];
+  const rows = peers.length
+    ? peers.map((peer) => (
+      `<tr><td>${esc(peer.host)}</td><td>${esc(peer.os)}</td><td>${esc(peer.online ? t("host.online") : t("host.offline"))}</td></tr>`
+    )).join("")
+    : `<tr><td colspan="3">${esc(t("host.nopeers"))}</td></tr>`;
+  return `<h3>${esc(t("host.devices"))}</h3>
+    <div class="table-scroll"><table class="internal-table host-table">
+      <thead><tr>${head}</tr></thead><tbody>${rows}</tbody>
+    </table></div>`;
+}
+
+function renderHostStatus() {
+  const root = $("#host-status");
+  const stamp = $("#host-stamp");
+  if (!root) return;
+  if (S.dataMode !== "internal") {
+    if (stamp) stamp.textContent = "";
+    return;
+  }
+  if (S.hostRequestFailed) {
+    if (stamp) stamp.textContent = "";
+    root.innerHTML = hostRetryHtml();
+    return;
+  }
+  if (!S.hostStatus) {
+    if (stamp) stamp.textContent = "";
+    root.innerHTML = `<p class="muted">${esc(t("loading"))}</p>`;
+    return;
+  }
+  if (stamp) stamp.textContent = `${S.hostStatus.generated_at} · ${t("host.refresh")}`;
+  root.innerHTML = hostFactsCard(S.hostStatus);
+}
+
+let hostGen = 0;
+async function refreshHostStatus() {
+  const gen = ++hostGen;
+  if (S.dataMode !== "internal") {
+    renderHostStatus();
+    return;
+  }
+  if (!S.hostStatus) renderHostStatus();
+  const result = await fetchJson("api/host-status");
+  if (gen !== hostGen || S.dataMode !== "internal") return;
+  if (result.failed) {
+    S.hostRequestFailed = true;
+  } else {
+    S.hostStatus = result.data;
+    S.hostRequestFailed = false;
+  }
+  renderHostStatus();
+}
+
 function renderInternal() {
   const panel = $("#internal-panel");
   if (!panel) return;
   panel.hidden = S.dataMode !== "internal";
+  renderHostStatus();
   if (S.dataMode !== "internal") return;
   const body = $("#internal-body");
   const stamp = $("#internal-stamp");
@@ -272,6 +358,7 @@ async function refreshInternal() {
     renderInternal();
     return;
   }
+  refreshHostStatus();
   if (!S.internal) {
     S.internalError = false;
     renderInternal();
@@ -305,6 +392,7 @@ async function refreshInternal() {
 
 document.addEventListener("click", (event) => {
   if (event.target.closest("#internal-retry")) refreshInternal();
+  if (event.target.closest("#host-retry")) refreshHostStatus();
 });
 
 bindModeSwitch();

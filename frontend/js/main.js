@@ -409,5 +409,6 @@ addEventListener("resize", () => {
   setInterval(refreshInsights, 15000);
   setInterval(refreshAlerts, Math.max(every, 5000));
   setInterval(() => { if (S.dataMode === "internal") refreshInternal(); }, 20000);
+  setInterval(() => { if (S.dataMode === "internal" && typeof refreshHostStatus === "function") refreshHostStatus(); }, 30000);
   setInterval(rotateHeadline, 6000);
 })();

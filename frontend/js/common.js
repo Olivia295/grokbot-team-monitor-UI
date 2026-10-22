@@ -18,6 +18,8 @@ const S = {
   internal: null,
   internalError: false,
   internalRequestFailed: false,
+  hostStatus: null,
+  hostRequestFailed: false,
 };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -54,7 +56,7 @@ async function postJson(url, body) {
 async function fetchJson(url) {
   if (STATIC) {
     // The online demo has no box behind it.
-    if (url.startsWith("api/internal")) return { ok: false, unavailable: true, data: { internal_available: false, reason: "online demo" } };
+    if (url.startsWith("api/internal") || url.startsWith("api/host-status")) return { ok: false, unavailable: true, data: { internal_available: false, reason: "online demo" } };
     try { return { ok: true, data: await staticJson(url) }; } catch { return { ok: false, failed: true }; }
   }
   let response;

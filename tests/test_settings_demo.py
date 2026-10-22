@@ -73,11 +73,19 @@ class DemoTest(unittest.TestCase):
 
 class ViewsTest(unittest.TestCase):
     def setUp(self):
+        self._internal = os.environ.get("BOT_OFFICE_INTERNAL")
+        os.environ["BOT_OFFICE_INTERNAL"] = "0"
         self.settings = {
             "dataSource": "demo", "language": "en", "privacy": False,
             "rooms": {"demo-studio": {"name": "Art Room", "order": -1}, "demo-intel": {"hidden": True}},
             "bots": {"demo-atlas": {"alias": "Boss", "look": {"hat": "beanie"}}, "demo-echo": {"hidden": True}},
         }
+
+    def tearDown(self):
+        if self._internal is None:
+            os.environ.pop("BOT_OFFICE_INTERNAL", None)
+        else:
+            os.environ["BOT_OFFICE_INTERNAL"] = self._internal
 
     def test_rooms_and_bots_follow_settings(self):
         office = office_view(self.settings, NOW)

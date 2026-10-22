@@ -11,7 +11,7 @@ private let zh = Locale.preferredLanguages.first?.hasPrefix("zh") ?? false
 private func L(_ en: String, _ cn: String) -> String { zh ? cn : en }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    private let port = Int(ProcessInfo.processInfo.environment["BOT_OFFICE_PORT"] ?? "") ?? 19200
+    private let port = Int(ProcessInfo.processInfo.environment["BOT_OFFICE_PORT"] ?? "") ?? 8080
     private var base: String { "http://127.0.0.1:\(port)" }
     private var statusItem: NSStatusItem!
     private var server: Process?

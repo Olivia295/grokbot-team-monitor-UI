@@ -472,6 +472,7 @@ class UiContractTest(unittest.TestCase):
         self.assertIn('data-mode="internal"', html)
         self.assertIn('data-mode="external"', html)
         self.assertIn('id="internal-panel"', html)
+        self.assertIn('id="host-status"', html)
         self.assertIn("Grok Bot 本机读取", i18n)
         self.assertIn("Grok Bot box (internal)", i18n)
         self.assertIn('"mode.external": "外部读取"', i18n)
@@ -483,8 +484,13 @@ class UiContractTest(unittest.TestCase):
         self.assertIn("localStorage", script)
         self.assertIn("api/mode", script)
         self.assertIn("api/internal", script)
+        self.assertIn("api/host-status", script)
         self.assertIn('"/api/mode"', server)
         self.assertIn('"/api/internal"', server)
+        self.assertIn('"/api/host-status"', server)
+        self.assertIn("grok-bot status", i18n)
+        self.assertLess(html.find('id="internal-panel"'), html.find('class="hero"'))
+        self.assertLess(html.find('id="host-status"'), html.find('id="internal-body"'))
 
 
 if __name__ == "__main__":

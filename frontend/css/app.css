@@ -727,6 +727,10 @@ body.static-demo .local-only{display:none!important}
 .mode-note{margin:0;max-width:42ch;font-size:11px;line-height:1.35;color:var(--ink-2)}
 .mode-note .retry,.internal-body .retry{margin-left:6px;border:1px solid var(--line);background:var(--card);color:inherit;border-radius:999px;padding:1px 8px;font:inherit;font-size:11px;cursor:pointer}
 .internal-body{display:grid;gap:18px}
+#internal-panel .section-title:first-child{margin-top:0}
+.host-table{min-width:0!important}
+.host-status h3{font-size:15px;margin:14px 0 8px}
+.host-facts td:first-child{color:var(--muted);width:38%}
 .internal-card{padding:16px 18px 14px}
 .internal-card h3{font-size:16px;margin-bottom:10px}
 .internal-stats{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
