@@ -31,6 +31,7 @@ try:  # installed package (pipx, uvx, Homebrew) or python -m backend.server
     from .events import append_events
     from .host_status import collect as collect_host_status
     from .internal_box import BoxError, PrivacyError, build, mode_status
+    from .status_board import build as build_status_board
     from .settings import SettingsError, load_settings, save_settings, settings_path
     from .views import flows_view, ingest_path, insights_view, office_view, use_box
 except ImportError:  # python3 backend/server.py from a checkout
@@ -40,6 +41,7 @@ except ImportError:  # python3 backend/server.py from a checkout
     from backend.events import append_events
     from backend.host_status import collect as collect_host_status
     from backend.internal_box import BoxError, PrivacyError, build, mode_status
+    from backend.status_board import build as build_status_board
     from backend.settings import SettingsError, load_settings, save_settings, settings_path
     from backend.views import flows_view, ingest_path, insights_view, office_view, use_box
 
@@ -181,6 +183,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._internal()
             elif path == "/api/host-status":
                 self._host_status()
+            elif path == "/api/status-board":
+                self._status_board()
             else:
                 self.send_error(404)
             return
@@ -285,6 +289,16 @@ class Handler(BaseHTTPRequestHandler):
             self._json(collect_host_status())
         except (OSError, ValueError):
             self._json({"error": "host status unavailable"}, status=500)
+
+    def _status_board(self) -> None:
+        status = mode_status()
+        if not status["internal_available"]:
+            self._json({"error": status["reason"], "internal_available": False}, status=403)
+            return
+        try:
+            self._json(build_status_board())
+        except (BoxError, PrivacyError, OSError, ValueError):
+            self._json({"error": "status board unavailable"}, status=500)
 
     def _html(self, status: int, body: str) -> None:
         data = body.encode("utf-8")

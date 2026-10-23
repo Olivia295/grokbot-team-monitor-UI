@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import socket
 import subprocess
 import time
 from pathlib import Path
@@ -31,19 +32,30 @@ def port_up(port: int, listing: str | None = None) -> bool:
     return f":{port} " in text
 
 
+def tcp_latency_ms(port: int, host: str = "127.0.0.1", timeout: float = 0.4) -> float | None:
+    """TCP connect time to a local port, or None if it does not accept a connection."""
+    start = time.perf_counter()
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return round((time.perf_counter() - start) * 1000, 1)
+    except OSError:
+        return None
+
+
 def _read_text(path: str) -> str:
     return Path(path).read_text(encoding="utf-8", errors="replace")
 
 
-def collect(*, generated_at: str | None = None, read_text=None, disk_usage=None, run=None) -> dict:
+def collect(*, generated_at: str | None = None, read_text=None, disk_usage=None, run=None, probe=None) -> dict:
     """Return the facts the old dashboard page showed.
 
-    ``read_text``, ``disk_usage`` and ``run`` are injectable so tests never
-    touch the real box, Tailscale, or ``/proc``.
+    ``read_text``, ``disk_usage``, ``run`` and ``probe`` are injectable so tests
+    never touch the real box, Tailscale, or ``/proc``.
     """
     read_text = read_text or _read_text
     disk_usage = disk_usage or shutil.disk_usage
     run = run or sh
+    probe = tcp_latency_ms if probe is None else probe
     stamp = generated_at if generated_at is not None else time.strftime("%Y-%m-%d %H:%M:%S %Z")
 
     uptime = {"seconds": 0.0, "days": 0, "hours": 0, "minutes": 0, "text": "unavailable"}
@@ -111,7 +123,16 @@ def collect(*, generated_at: str | None = None, read_text=None, disk_usage=None,
         tsinfo, peers = "unavailable", []
 
     listing = run("ss -ltn")
-    services = [{"name": name, "port": port, "up": port_up(port, listing)} for name, port in SERVICES]
+    services = []
+    for name, port in SERVICES:
+        up = port_up(port, listing)
+        latency = probe(port) if up else None
+        if latency is not None:
+            try:
+                latency = round(float(latency), 1)
+            except (TypeError, ValueError):
+                latency = None
+        services.append({"name": name, "port": port, "up": up, "latency_ms": latency})
 
     return {
         "generated_at": stamp,

@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from backend.host_status import SERVICES, collect, port_up  # noqa: E402
+from backend.host_status import SERVICES, collect, port_up, tcp_latency_ms  # noqa: E402
 from backend.server import PORT  # noqa: E402
 
 
@@ -61,7 +61,16 @@ class HostStatusTest(unittest.TestCase):
         self.assertEqual(PORT, 8080)
 
     def test_collect_matches_dashboard_formulas(self):
-        data = collect(generated_at="2026-10-22 12:00:00 UTC", read_text=_read_text, disk_usage=_disk, run=_run)
+        def probe(port: int):
+            return 1.2 if port in (8888, 8080) else None
+
+        data = collect(
+            generated_at="2026-10-22 12:00:00 UTC",
+            read_text=_read_text,
+            disk_usage=_disk,
+            run=_run,
+            probe=probe,
+        )
         self.assertEqual(data["generated_at"], "2026-10-22 12:00:00 UTC")
         self.assertEqual(data["refresh_seconds"], 30)
         self.assertEqual(data["uptime"]["text"], "1d 1h 1m")
@@ -77,8 +86,12 @@ class HostStatusTest(unittest.TestCase):
             "Running · grok-bot.tail4e6403.ts.net · 100.64.0.2 · key expires 2026-12-01T00:00:00Z",
         )
         self.assertEqual(
-            [(s["name"], s["port"], s["up"]) for s in data["services"]],
-            [("JupyterLab", 8888, True), ("Dashboard", 8080, True), ("Blog", 4000, False)],
+            [(s["name"], s["port"], s["up"], s["latency_ms"]) for s in data["services"]],
+            [
+                ("JupyterLab", 8888, True, 1.2),
+                ("Dashboard", 8080, True, 1.2),
+                ("Blog", 4000, False, None),
+            ],
         )
         self.assertEqual(
             [(p["host"], p["os"], p["online"]) for p in data["peers"]],
@@ -91,7 +104,7 @@ class HostStatusTest(unittest.TestCase):
                 return SS_LISTING
             return "error: not found"
 
-        data = collect(generated_at="now", read_text=_read_text, disk_usage=_disk, run=run)
+        data = collect(generated_at="now", read_text=_read_text, disk_usage=_disk, run=run, probe=lambda _p: None)
         self.assertEqual(data["tailscale"], "unavailable")
         self.assertEqual(data["peers"], [])
 
@@ -103,6 +116,21 @@ class HostStatusTest(unittest.TestCase):
     def test_services_list_matches_dashboard(self):
         self.assertEqual(SERVICES, (("JupyterLab", 8888), ("Dashboard", 8080), ("Blog", 4000)))
 
+    def test_tcp_latency_open_and_closed_port(self):
+        import socket
+
+        server = socket.socket()
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        port = server.getsockname()[1]
+        try:
+            ms = tcp_latency_ms(port)
+            self.assertIsNotNone(ms)
+            self.assertGreaterEqual(ms, 0)
+        finally:
+            server.close()
+        self.assertIsNone(tcp_latency_ms(port, timeout=0.2))
+
     def test_missing_proc_is_unavailable(self):
         def boom(_path: str) -> str:
             raise FileNotFoundError(_path)
@@ -110,7 +138,7 @@ class HostStatusTest(unittest.TestCase):
         def no_disk(_path: str):
             raise OSError("no disk")
 
-        data = collect(generated_at="now", read_text=boom, disk_usage=no_disk, run=lambda _c: "")
+        data = collect(generated_at="now", read_text=boom, disk_usage=no_disk, run=lambda _c: "", probe=lambda _p: None)
         self.assertEqual(data["uptime"]["text"], "unavailable")
         self.assertEqual(data["load"], [])
         self.assertEqual(data["memory"]["text"], "unavailable")
@@ -134,7 +162,13 @@ class HostStatusApiTest(unittest.TestCase):
         thread = threading.Thread(target=httpd.serve_forever, daemon=True)
         thread.start()
         port = httpd.server_address[1]
-        sample = collect(generated_at="now", read_text=_read_text, disk_usage=_disk, run=_run)
+        sample = collect(
+            generated_at="now",
+            read_text=_read_text,
+            disk_usage=_disk,
+            run=_run,
+            probe=lambda port: 0.5 if port in (8888, 8080) else None,
+        )
         try:
             with mock.patch("backend.server.collect_host_status", return_value=sample):
                 conn = HTTPConnection("127.0.0.1", port, timeout=5)
