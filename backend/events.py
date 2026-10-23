@@ -1,4 +1,4 @@
-"""Generic event adapter: any multi-agent system can feed Bot Office with a JSONL file.
+"""Generic event adapter: any multi-agent system can feed Bot Monitoring Room with a JSONL file.
 
 One JSON object per line. The fields that matter:
 

@@ -1,6 +1,6 @@
-// Bot Office menu-bar app for macOS 13+. No dependencies; build with ./build-app.sh.
+// Bot Monitoring Room menu-bar app for macOS 13+. No dependencies; build with ./build-app.sh.
 //
-// It keeps the local Bot Office server running (an installed `bot-office` command, or the
+// It keeps the local Bot Monitoring Room server running (an installed `bot-monitor` command, or the
 // checkout the app was built from), shows how many bots are busy right in the menu bar,
 // lists live relays and the latest alert, and can start itself at login.
 
@@ -11,7 +11,7 @@ private let zh = Locale.preferredLanguages.first?.hasPrefix("zh") ?? false
 private func L(_ en: String, _ cn: String) -> String { zh ? cn : en }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    private let port = Int(ProcessInfo.processInfo.environment["BOT_OFFICE_PORT"] ?? "") ?? 8080
+    private let port = Int(ProcessInfo.processInfo.environment["BOT_OFFICE_PORT"] ?? "") ?? 10000
     private var base: String { "http://127.0.0.1:\(port)" }
     private var statusItem: NSStatusItem!
     private var server: Process?
@@ -44,16 +44,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func startServer() {
         guard server == nil, !starting else { return }
         starting = true
-        let repo = Bundle.main.object(forInfoDictionaryKey: "BotOfficeRepo") as? String ?? ""
+        let repo = Bundle.main.object(forInfoDictionaryKey: "BotMonitorRepo") as? String ?? ""
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         // A login shell finds pipx/uv/Homebrew installs; arguments are passed, never spliced in.
         process.arguments = ["-lc", """
-            if command -v bot-office >/dev/null 2>&1; then exec bot-office --port "$2"; fi
+            if command -v bot-monitor >/dev/null 2>&1; then exec bot-monitor --port "$2"; fi
             if [ -f "$1/backend/server.py" ]; then exec python3 "$1/backend/server.py" --port "$2"; fi
-            echo "Bot Office not found: install it with pipx or rebuild this app from a checkout" >&2; exit 1
-            """, "bot-office", repo, String(port)]
-        let log = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Bot Office.log")
+            echo "Bot Monitoring Room not found: install it with pipx or rebuild this app from a checkout" >&2; exit 1
+            """, "bot-monitor", repo, String(port)]
+        let log = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Bot Monitoring Room.log")
         FileManager.default.createFile(atPath: log.path, contents: nil)
         if let handle = try? FileHandle(forWritingTo: log) {
             handle.seekToEndOfFile()
@@ -67,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try process.run()
             server = process
         } catch {
-            NSLog("Bot Office: could not start the server: \(error)")
+            NSLog("Bot Monitoring Room: could not start the server: \(error)")
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in self?.starting = false }
     }
@@ -121,7 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var title = busy > 0 ? " \(busy)" : ""
         if attention > 0 { title += " !" }
         button.title = reachable ? title : " …"
-        button.toolTip = reachable ? L("Bot Office", "Bot协作室") : L("Bot Office is starting…", "Bot协作室正在启动…")
+        button.toolTip = reachable ? L("Bot Monitoring Room", "Bot监控室") : L("Bot Monitoring Room is starting…", "Bot监控室正在启动…")
     }
 
     // MARK: menu
@@ -140,17 +140,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 menu.addItem(item("🔔 " + String(alert.title.prefix(52)), #selector(openFlow(_:)), represented: alert.flow ?? ""))
             }
         } else {
-            menu.addItem(disabled(L("Starting Bot Office…", "正在启动Bot协作室…")))
+            menu.addItem(disabled(L("Starting Bot Monitoring Room…", "正在启动Bot监控室…")))
         }
         menu.addItem(.separator())
-        menu.addItem(item(L("Open Bot Office", "打开Bot协作室"), #selector(openHome), key: "o"))
+        menu.addItem(item(L("Open Bot Monitoring Room", "打开Bot监控室"), #selector(openHome), key: "o"))
         menu.addItem(item(L("Big-screen mode", "大屏模式"), #selector(openTV)))
         menu.addItem(item(L("Settings…", "设置…"), #selector(openSettings), key: ","))
         menu.addItem(.separator())
         let login = item(L("Start at login", "登录时启动"), #selector(toggleLogin))
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(login)
-        menu.addItem(item(L("Quit Bot Office", "退出Bot协作室"), #selector(quit), key: "q"))
+        menu.addItem(item(L("Quit Bot Monitoring Room", "退出Bot监控室"), #selector(quit), key: "q"))
     }
 
     private func disabled(_ title: String) -> NSMenuItem {
@@ -188,8 +188,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             let alert = NSAlert()
             alert.messageText = L("Couldn't change the login item", "没能修改登录项")
-            alert.informativeText = L("Move Bot Office.app to the Applications folder and try again.\n\n\(error.localizedDescription)",
-                                      "请把 Bot Office.app 放进“应用程序”文件夹后再试。\n\n\(error.localizedDescription)")
+            alert.informativeText = L("Move Bot Monitoring Room.app to the Applications folder and try again.\n\n\(error.localizedDescription)",
+                                      "请把 Bot Monitoring Room.app 放进“应用程序”文件夹后再试。\n\n\(error.localizedDescription)")
             alert.runModal()
         }
     }
@@ -200,7 +200,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: icon
 
-    /// The Bot Office mark as a menu-bar template image: a bot head with an antenna.
+    /// The Bot Monitoring Room mark as a menu-bar template image: a bot head with an antenna.
     private static func botIcon() -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { _ in
             NSColor.black.setStroke()

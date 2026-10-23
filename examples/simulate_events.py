@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integrations"))
-from bot_office import BotOffice  # noqa: E402
+from bot_monitor import BotMonitor  # noqa: E402
 
 TEAM = [
     ("planner", "Planner", "Lead", "Core", "round", "lemon"),
@@ -54,7 +54,7 @@ RUNS = [
 ]
 
 
-def play(office: BotOffice, ask: str, steps, reply: str, start: float, pace: float, live: bool) -> None:
+def play(office: BotMonitor, ask: str, steps, reply: str, start: float, pace: float, live: bool) -> None:
     run = office.new_run()
     at = start
 
@@ -82,12 +82,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     target = parser.add_mutually_exclusive_group(required=True)
     target.add_argument("--out", help="append to this JSONL file")
-    target.add_argument("--post", nargs="?", const="http://127.0.0.1:8080", help="send to a running Bot Office")
+    target.add_argument("--post", nargs="?", const="http://127.0.0.1:10000", help="send to a running Bot Monitoring Room")
     parser.add_argument("--history", type=int, default=14, help="relays to backfill over the last day")
     parser.add_argument("--live", action="store_true", help="keep playing new relays in real time")
     parser.add_argument("--pace", type=float, default=6.0, help="seconds between live events")
     args = parser.parse_args()
-    office = BotOffice(file=args.out) if args.out else BotOffice(url=args.post)
+    office = BotMonitor(file=args.out) if args.out else BotMonitor(url=args.post)
     now = time.time()
     for bot_id, name, title, team, shape, color in TEAM:
         office.emit({"type": "bot", "id": bot_id, "name": name, "title": title, "team": team, "shape": shape,

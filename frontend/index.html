@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bot Office</title>
+  <title>Bot Monitoring Room</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/app.css">
 </head>
@@ -11,7 +11,7 @@
   <header class="top">
     <div class="brand">
       <span class="brand-logo" id="brand-logo"></span>
-      <div><h1 data-i18n="app.title">Bot协作室</h1><p data-i18n="app.tagline"></p></div>
+      <div><h1 data-i18n="app.title">Bot监控室</h1><p data-i18n="app.tagline"></p></div>
     </div>
     <div class="top-tools">
       <div class="mode-wrap" id="mode-switch">
@@ -42,35 +42,13 @@
   <main class="page">
     <p class="banner" id="banner" role="status" hidden></p>
 
-    <section id="internal-panel" hidden aria-labelledby="host-title">
-      <div id="status-board" class="status-board" hidden></div>
-      <div class="section-title">
-        <h2 id="host-title" data-i18n="host.title">grok-bot status</h2>
-        <span class="muted" id="host-stamp"></span>
-      </div>
-      <div id="host-status" class="internal-body"></div>
-      <div class="section-title">
-        <h2 id="internal-title" data-i18n="internal.title"></h2>
-        <span class="muted" id="internal-stamp"></span>
-      </div>
-      <p class="muted internal-intro" id="internal-intro" data-i18n="internal.introDemo" hidden></p>
-      <div id="internal-body" class="internal-body"></div>
-    </section>
-
-    <section class="hero">
-      <div class="card hero-main">
-        <div class="hero-art" id="hero-art" aria-hidden="true"></div>
+    <section class="card strip" aria-labelledby="hero-title">
+      <div class="strip-main">
         <p class="eyebrow" id="greeting"></p>
         <h2 id="hero-title"></h2>
         <p class="headline" id="headline" aria-live="polite"></p>
-        <div class="tiles" id="tiles"></div>
       </div>
-      <div class="card fuel" id="fuel"></div>
-    </section>
-
-    <section class="awards-wrap" aria-labelledby="awards-title">
-      <div class="section-title"><h2 id="awards-title"><i data-icon="trophy" data-size="18"></i> <span data-i18n="awards.title"></span></h2><span class="muted" id="awards-note"></span></div>
-      <ol class="awards" id="awards"></ol>
+      <div class="tiles" id="tiles"></div>
     </section>
 
     <div class="layout">
@@ -138,8 +116,15 @@
       </aside>
     </div>
 
-    <section class="insights" aria-labelledby="insights-title">
-      <div class="section-title"><h2 id="insights-title"><i data-icon="insights" data-size="18"></i> <span data-i18n="insights.title"></span></h2><span class="muted" data-i18n="insights.note"></span></div>
+    <nav class="page-tabs" id="page-tabs" role="tablist" data-i18n-aria="aria.pageTabs">
+      <button type="button" role="tab" id="tab-btn-overview" data-tab="overview" aria-controls="tab-overview" aria-selected="true"><i data-icon="insights"></i><span data-i18n="tab.overview"></span></button>
+      <button type="button" role="tab" id="tab-btn-team" data-tab="team" aria-controls="tab-team" aria-selected="false" tabindex="-1"><i data-icon="team"></i><span data-i18n="tab.team"></span></button>
+      <button type="button" role="tab" id="tab-btn-collab" data-tab="collab" aria-controls="tab-collab" aria-selected="false" tabindex="-1"><i data-icon="flow"></i><span data-i18n="tab.collab"></span></button>
+      <button type="button" role="tab" id="tab-btn-host" data-tab="host" aria-controls="tab-host" aria-selected="false" tabindex="-1" hidden><i data-icon="gear"></i><span data-i18n="tab.host"></span></button>
+    </nav>
+
+    <section class="tab-panel" id="tab-overview" role="tabpanel" aria-labelledby="tab-btn-overview">
+      <div id="status-board" class="status-board" hidden></div>
       <div class="insight-grid">
         <article class="card insight">
           <header><h3><i data-icon="inbox"></i><span data-i18n="attn.title"></span> <span class="count" id="attention-count"></span></h3></header>
@@ -155,10 +140,37 @@
             <button type="button" class="small-btn" id="week-png"><i data-icon="image"></i> <span data-i18n="week.png"></span></button>
           </div>
         </article>
-        <article class="card insight">
-          <header><h3><i data-icon="clock"></i><span data-i18n="autos.title"></span> <span class="count" id="autos-count"></span></h3></header>
-          <div id="automations"></div>
-        </article>
+        <div class="ov-stack">
+          <article class="card fuel" id="fuel"></article>
+          <article class="card insight">
+            <header><h3><i data-icon="clock"></i><span data-i18n="autos.title"></span> <span class="count" id="autos-count"></span></h3></header>
+            <div id="automations"></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="tab-team" role="tabpanel" aria-labelledby="tab-btn-team" hidden>
+      <section id="internal-panel" hidden aria-labelledby="internal-title">
+        <div class="section-title">
+          <h2 id="internal-title" data-i18n="internal.title"></h2>
+          <span class="muted" id="internal-stamp"></span>
+        </div>
+        <p class="muted internal-intro" id="internal-intro" data-i18n="internal.introDemo" hidden></p>
+        <div id="internal-body" class="internal-body"></div>
+      </section>
+      <section class="card roster-wrap" aria-labelledby="roster-title">
+        <div class="section-title"><h2 id="roster-title"><i data-icon="team" data-size="18"></i> <span data-i18n="roster.title"></span></h2><span class="muted" data-i18n="roster.note"></span></div>
+        <div class="roster" id="roster"></div>
+      </section>
+      <section class="awards-wrap" aria-labelledby="awards-title">
+        <div class="section-title"><h2 id="awards-title"><i data-icon="trophy" data-size="18"></i> <span data-i18n="awards.title"></span></h2><span class="muted" id="awards-note"></span></div>
+        <ol class="awards" id="awards"></ol>
+      </section>
+    </section>
+
+    <section class="tab-panel insights" id="tab-collab" role="tabpanel" aria-labelledby="tab-btn-collab" hidden>
+      <div class="insight-grid">
         <article class="card insight wide" id="bottleneck-card">
           <header><h3><i data-icon="flow"></i><span data-i18n="neck.title"></span></h3><span class="muted" id="neck-note"></span></header>
           <div class="neck-kpis" id="neck-kpis"></div>
@@ -167,6 +179,7 @@
             <div class="neck-links" id="neck-links"></div>
           </div>
         </article>
+        <div class="wide" id="box-edges" hidden></div>
         <article class="card insight wide">
           <header><h3><i data-icon="grid"></i><span data-i18n="rhythm.title"></span></h3><span class="muted" data-i18n="rhythm.note"></span></header>
           <div id="rhythm"></div>
@@ -174,10 +187,14 @@
       </div>
     </section>
 
-    <section class="card roster-wrap" aria-labelledby="roster-title">
-      <div class="section-title"><h2 id="roster-title"><i data-icon="team" data-size="18"></i> <span data-i18n="roster.title"></span></h2><span class="muted" data-i18n="roster.note"></span></div>
-      <div class="roster" id="roster"></div>
+    <section class="tab-panel" id="tab-host" role="tabpanel" aria-labelledby="tab-btn-host" hidden>
+      <div class="section-title">
+        <h2 id="host-title" data-i18n="host.title"></h2>
+        <span class="muted" id="host-stamp"></span>
+      </div>
+      <div id="host-status" class="internal-body"></div>
     </section>
+
     <footer class="foot muted"><span class="live-dot"></span><span id="freshness"></span><span class="spacer"></span><a href="settings.html" data-i18n="foot.settings"></a></footer>
   </main>
 
@@ -216,6 +233,7 @@
   <script src="js/internal.js"></script>
   <script src="js/export.js"></script>
   <script src="js/tv.js"></script>
+  <script src="js/tabs.js"></script>
   <script src="js/tour.js"></script>
   <script src="js/main.js"></script>
 </body>

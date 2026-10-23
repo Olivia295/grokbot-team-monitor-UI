@@ -53,6 +53,7 @@ function syncModeChrome() {
   document.getElementById("mode-switch").hidden = !S.modeRequestFailed;
   const panel = document.getElementById("internal-panel");
   if (panel) panel.hidden = !showsPanel();
+  if (typeof syncTabs === "function") syncTabs();
 }
 
 function reloadOfficeViews() {
@@ -191,25 +192,36 @@ function summaryCard(data) {
 }
 
 function tableCard(data) {
-  const head = ["name", "label", "group", "status", "last", "files", "tasks"]
-    .map((key) => `<th>${esc(t(`internal.col.${key}`))}</th>`).join("");
+  // The status board's hourly activity joins the box panel's rows by name.
+  const hours = new Map((S.statusBoard?.bots || []).map((bot) => [bot.name, bot.hours_24 || []]));
+  const counts = new Map((data.usage?.counts || []).map((row) => [row.name, row]));
+  const cols = ["name", "status", "last", "files", "messages", ...(hours.size ? ["hours"] : []), "tasks"];
+  const head = cols.map((key) => `<th class="col-${key}">${esc(t(`internal.col.${key}`))}</th>`).join("");
   const rows = (data.bots || []).map((bot, index) => {
     const quiet = bot.status === "不监控";
-    const last = quiet || !bot.last_activity ? "—" : String(bot.last_activity).replace("T", " ").slice(0, 16);
-    const files = quiet ? "—" : String(bot.files_modified_7d ?? 0);
-    const title = bot.duty ? ` title="${esc(bot.duty)}"` : "";
+    const last = quiet || !bot.last_activity ? "—" : String(bot.last_activity).replace("T", " ").slice(5, 16);
+    const files = quiet || bot.status === "no-folder" ? "—" : String(bot.files_modified_7d ?? 0);
+    const count = counts.get(bot.name);
+    const messages = quiet || !count ? "—"
+      : `<span title="${esc(t("internal.messages.title"))}">${esc(count.messages_7d)} <span class="muted">/ ${esc(count.received_7d)}</span></span>`;
+    const agent = bot.id && S.office?.agents?.find((item) => item.id === bot.id);
+    const name = agent
+      ? `<button type="button" class="link-btn bot-link" data-profile="${esc(bot.id)}">${esc(bot.name)}</button>`
+      : esc(bot.name);
+    const sub = [bot.label, bot.group].filter(Boolean).join(" · ");
+    const strip = hours.size ? `<td class="col-hours"><div class="sb-hours" aria-hidden="true">${sbHourCells(hours.get(bot.name) || [], 23)}</div></td>` : "";
     return `<tr>
-      <td class="name"${title}>${esc(bot.name)}</td>
-      <td>${esc(bot.label || "—")}</td>
-      <td>${esc(bot.group || "—")}</td>
+      <td class="name"${bot.duty ? ` title="${esc(bot.duty)}"` : ""}>${name}${sub ? `<span class="sub">${esc(sub)}</span>` : ""}</td>
       <td><span class="st-badge ${esc(statusClass(bot.status))}">${esc(statusLabel(bot.status))}</span></td>
-      <td>${esc(last)}</td>
+      <td class="col-last">${esc(last)}</td>
       <td class="num">${esc(files)}</td>
+      <td class="num">${messages}</td>
+      ${strip}
       <td>${tasksCell(bot, index)}</td>
     </tr>`;
   }).join("");
   return `<article class="card internal-card">
-    <div class="table-scroll"><table class="internal-table">
+    <div class="table-scroll"><table class="internal-table team-table">
       <thead><tr>${head}</tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
@@ -234,35 +246,6 @@ function edgesCard(data) {
   </article>`;
 }
 
-function usageCard(data) {
-  const usage = data.usage || {};
-  // The box writes this note in Chinese; English readers get the same fact in English.
-  const note = S.lang === "en" ? t("internal.usage.none") : (usage.note || t("internal.usage.none"));
-  const counts = usage.counts || [];
-  const max = counts.reduce((peak, item) => Math.max(peak, item.messages_7d || 0), 0);
-  const bars = counts.length
-    ? counts.map((item) => {
-      const sent = item.messages_7d || 0;
-      const width = !sent || !max ? 0 : Math.max(2, Math.min(100, Math.round(100 * sent / max)));
-      const meta = t("internal.bar", { sent, received: item.received_7d || 0 });
-      return `<div class="bar-row">
-        <div class="bar-name">${esc(item.name)}</div>
-        <div class="bar-track" role="presentation"><div class="bar-fill" style="width:${width}%"></div></div>
-        <div class="bar-val">${esc(meta)}</div>
-      </div>`;
-    }).join("")
-    : `<p class="muted">${esc(t("internal.edges.none"))}</p>`;
-  const label = S.lang === "en" ? t("internal.counts.hint") : (usage.counts_label || t("internal.counts.hint"));
-  return `<article class="card internal-card">
-    <h3>${esc(t("internal.usage"))}</h3>
-    <div class="quota-banner"><span class="quota-mark" aria-hidden="true">!</span><strong>${esc(note)}</strong></div>
-    <div class="counts" role="img" aria-label="${esc(label)}">
-      <p class="muted counts-label">${esc(label)}</p>
-      ${bars}
-    </div>
-  </article>`;
-}
-
 function hostRetryHtml() {
   return `<p class="muted">${esc(t("host.error"))} <button type="button" class="retry" id="host-retry">${esc(t("request.retry"))}</button></p>`;
 }
@@ -283,9 +266,9 @@ function hostFactsCard(data) {
 }
 
 function hostServicesTable(data) {
-  const head = ["service", "port", "status"].map((key) => `<th>${esc(t(`host.col.${key}`))}</th>`).join("");
+  const head = ["service", "port", "status", "latency"].map((key) => `<th>${esc(t(`host.col.${key}`))}</th>`).join("");
   const rows = (data.services || []).map((svc) => (
-    `<tr><td>${esc(svc.name)}</td><td>${esc(svc.port)}</td><td>${esc(svc.up ? t("host.up") : t("host.down"))}</td></tr>`
+    `<tr><td>${esc(svc.name)}</td><td>${esc(svc.port)}</td><td>${esc(svc.up ? t("host.up") : t("host.down"))}</td><td class="num">${svc.latency_ms == null ? "—" : `${esc(svc.latency_ms)} ms`}</td></tr>`
   )).join("");
   return `<h3>${esc(t("host.services"))}</h3>
     <div class="table-scroll"><table class="internal-table host-table">
@@ -466,7 +449,8 @@ function sbChart(values, avg, labels, liveIndex) {
   const series = (values || []).map((n) => Number(n) || 0);
   const mean = (avg || []).map((n) => (n === null || n === undefined ? null : Number(n)));
   if (!series.length) return `<p class="muted">${esc(sbNa())}</p>`;
-  const w = 640, h = 260, padL = 40, padR = 18, padT = 16, padB = 36;
+  // Wide and short: it sits full-width under the KPI cards.
+  const w = 960, h = 220, padL = 40, padR = 18, padT = 14, padB = 32;
   const innerW = w - padL - padR, innerH = h - padT - padB;
   const peak = sbNiceMax(Math.max(1, ...series, ...mean.map((n) => n || 0)));
   const xAt = (i) => padL + (series.length === 1 ? innerW / 2 : i * innerW / (series.length - 1));
@@ -504,35 +488,6 @@ function sbCurrentHour(data) {
   const hour = Number(label);
   return Number.isFinite(hour) ? hour : 23;
 }
-function sbBotsTable(data) {
-  const win7 = S.boardWindow === "7d";
-  const hoursKey = win7 ? "hours_7d" : "hours_24";
-  const fadeIndex = win7 ? sbCurrentHour(data) : 23;
-  const head = `<tr>
-    <th>${esc(t("board.col.bot"))}</th>
-    <th>${esc(t("board.col.group"))}</th>
-    <th>${esc(t("board.col.last"))}</th>
-    <th>${esc(t(win7 ? "board.col.hours7" : "board.col.hours"))}</th>
-  </tr>`;
-  const rows = (data.bots || []).map((bot) => {
-    const note = bot.unmonitored ? ` title="${esc(t("board.unmonitored"))}"` : "";
-    const cells = bot[hoursKey] || [];
-    const fade = win7 ? fadeIndex : cells.length - 1;
-    return `<tr>
-      <td class="name"${note}>${esc(bot.name)}</td>
-      <td>${esc(bot.group || "—")}</td>
-      <td>${esc(sbLastActive(bot.last_active))}</td>
-      <td><div class="sb-hours" aria-hidden="true">${sbHourCells(cells, fade)}</div></td>
-    </tr>`;
-  }).join("");
-  return `<article class="card sb-section">
-    <div class="sb-section-head"><h3>${esc(t("board.bots.title"))}</h3></div>
-    <p class="sb-legend">${esc(t("board.bots.note"))}</p>
-    <div class="table-scroll"><table class="sb-table">
-      <thead>${head}</thead><tbody>${rows}</tbody>
-    </table></div>
-  </article>`;
-}
 function sbChartCard(data) {
   const series = data.messages || {};
   const win7 = S.boardWindow === "7d";
@@ -557,31 +512,6 @@ function sbChartCard(data) {
       <h3>${esc(t("board.chart.title"))} <button type="button" class="sb-help" title="${esc(t("board.chart.hint"))}" aria-label="${esc(t("board.chart.hint"))}">?</button></h3>
     </div>
     ${body}
-  </article>`;
-}
-function sbServices(data) {
-  const rows = (data.services || []).map((svc) => {
-    const up = !!svc.up;
-    const latency = svc.latency_ms === null || svc.latency_ms === undefined ? sbNa() : t("board.svc.ms", { n: svc.latency_ms });
-    return `<tr>
-      <td>${esc(svc.name)}</td>
-      <td class="num">${esc(svc.port)}</td>
-      <td>${esc(up ? t("board.svc.up") : t("board.svc.down"))}</td>
-      <td>${esc(up ? latency : sbNa())}</td>
-    </tr>`;
-  }).join("") || `<tr><td colspan="4" class="muted">${esc(sbNa())}</td></tr>`;
-  return `<article class="card sb-section">
-    <div class="sb-section-head">
-      <h3>${esc(t("board.svc.title"))} <button type="button" class="sb-help" title="${esc(t("board.svc.note"))}" aria-label="${esc(t("board.svc.note"))}">?</button></h3>
-      ${sbPill({ available: (data.services || []).length > 0, status: (data.services || []).some((s) => s.up) ? "ok" : "watch" })}
-    </div>
-    <div class="table-scroll"><table class="sb-table">
-      <thead><tr>
-        <th>${esc(t("board.svc.name"))}</th><th>${esc(t("board.svc.port"))}</th>
-        <th>${esc(t("board.svc.reach"))}</th><th>${esc(t("board.svc.latency"))}</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table></div>
   </article>`;
 }
 function sbBanner(data) {
@@ -625,9 +555,7 @@ function renderStatusBoard() {
         <button type="button" data-board-window="7d" aria-pressed="${String(win === "7d")}">${esc(t("board.win.7d"))}</button>
       </div>
     </div>
-    <p class="sb-legend">${esc(t(win === "7d" ? "board.legend.7d" : "board.legend"))}</p>
-    ${sbBotsTable(data)}
-    <div class="sb-split">${sbChartCard(data)}${sbServices(data)}</div>`;
+    ${sbChartCard(data)}`;
 }
 
 let boardGen = 0;
@@ -659,9 +587,14 @@ function renderInternal() {
   const panel = $("#internal-panel");
   if (!panel) return;
   panel.hidden = !showsPanel();
-  renderStatusBoard();
-  renderHostStatus();
-  if (!showsPanel()) return;
+  // Reading a box, the merged table replaces the team cards.
+  const roster = $(".roster-wrap");
+  if (roster) roster.hidden = S.dataMode === "internal";
+  if (!showsPanel()) {
+    const edges = $("#box-edges");
+    if (edges) edges.hidden = true;
+    return;
+  }
   $("#internal-title").textContent = t(STATIC ? "internal.titleDemo" : "internal.title");
   const intro = $("#internal-intro");
   if (intro) intro.hidden = !STATIC;
@@ -683,8 +616,12 @@ function renderInternal() {
     return;
   }
   if (stamp) stamp.textContent = formatGenerated(S.internal.generated_at, S.internal.timezone);
-  body.innerHTML = summaryCard(S.internal) + tableCard(S.internal)
-    + `<div class="internal-split">${edgesCard(S.internal)}${usageCard(S.internal)}</div>`;
+  body.innerHTML = summaryCard(S.internal) + tableCard(S.internal);
+  const edges = $("#box-edges");
+  if (edges) {
+    edges.hidden = false;
+    edges.innerHTML = edgesCard(S.internal);
+  }
 }
 
 async function refreshInternal() {

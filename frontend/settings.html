@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Settings · Bot Office</title>
+  <title>Settings · Bot Monitoring Room</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/app.css">
 </head>
@@ -25,6 +25,7 @@
       <a href="#privacy" data-i18n="set.privacy"></a>
       <a href="#data" class="local-only" data-i18n="set.data"></a>
       <a href="#alerts" class="local-only" data-i18n="set.alerts"></a>
+      <a href="#services" class="box-only" data-i18n="set.services" hidden></a>
       <a href="#tv" data-i18n="set.tv"></a>
       <a href="#rooms" data-i18n="set.rooms"></a>
       <a href="#bots" data-i18n="set.bots"></a>
@@ -103,6 +104,13 @@
           <ul class="test-results" id="test-results" aria-live="polite"></ul>
           <p class="hint" data-i18n="set.hookHint"></p>
         </fieldset>
+      </section>
+
+      <section class="card set-section box-only" id="services" hidden>
+        <h2 data-i18n="set.services"></h2>
+        <p class="hint" data-i18n="set.servicesHint"></p>
+        <ol class="hook-list service-list" id="service-list"></ol>
+        <div class="btn-row"><button type="button" class="small-btn" id="service-add">＋ <span data-i18n="set.serviceAdd"></span></button></div>
       </section>
 
       <section class="card set-section" id="tv">

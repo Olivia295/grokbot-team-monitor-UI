@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from backend.host_status import SERVICES, collect, port_up, tcp_latency_ms  # noqa: E402
+from backend.host_status import KNOWN_SERVICES, SELF_NAME, collect, port_up, tcp_latency_ms  # noqa: E402
 from backend.server import PORT  # noqa: E402
 
 
@@ -57,8 +57,8 @@ def _run(cmd: str) -> str:
 
 
 class HostStatusTest(unittest.TestCase):
-    def test_default_port_is_8080(self):
-        self.assertEqual(PORT, 8080)
+    def test_default_port_is_10000(self):
+        self.assertEqual(PORT, 10000)
 
     def test_collect_matches_dashboard_formulas(self):
         def probe(port: int):
@@ -70,6 +70,7 @@ class HostStatusTest(unittest.TestCase):
             disk_usage=_disk,
             run=_run,
             probe=probe,
+            own_port=8080,
         )
         self.assertEqual(data["generated_at"], "2026-10-22 12:00:00 UTC")
         self.assertEqual(data["refresh_seconds"], 30)
@@ -87,12 +88,8 @@ class HostStatusTest(unittest.TestCase):
         )
         self.assertEqual(
             [(s["name"], s["port"], s["up"], s["latency_ms"]) for s in data["services"]],
-            [
-                ("JupyterLab", 8888, True, 1.2),
-                ("Bot Office (Dashboard)", 8080, True, 1.2),
-                ("MessageHub", 8090, False, None),
-                ("Blog", 4000, False, None),
-            ],
+            # This app first, then only the known services that are listening.
+            [(SELF_NAME, 8080, True, 1.2), ("JupyterLab", 8888, True, 1.2)],
         )
         self.assertEqual(
             [(p["host"], p["os"], p["online"]) for p in data["peers"]],
@@ -114,8 +111,14 @@ class HostStatusTest(unittest.TestCase):
         self.assertFalse(port_up(4000, SS_LISTING))
         self.assertFalse(port_up(80, "error: missing"))
 
-    def test_services_list_matches_dashboard(self):
-        self.assertEqual(SERVICES, (("JupyterLab", 8888), ("Bot Office (Dashboard)", 8080), ("MessageHub", 8090), ("Blog", 4000)))
+    def test_known_services_are_the_old_dashboards(self):
+        self.assertEqual(KNOWN_SERVICES, (("JupyterLab", 8888), ("MessageHub", 8090), ("Blog", 4000)))
+
+    def test_settings_list_replaces_the_known_ones(self):
+        data = collect(generated_at="now", read_text=_read_text, disk_usage=_disk, run=_run, probe=lambda _p: None,
+                       services=[{"name": "Blog", "port": 4000}, {"name": "Jupyter", "port": 8888}], own_port=10000)
+        self.assertEqual([(s["name"], s["port"], s["up"]) for s in data["services"]],
+                         [(SELF_NAME, 10000, False), ("Blog", 4000, False), ("Jupyter", 8888, True)])
 
     def test_tcp_latency_open_and_closed_port(self):
         import socket
@@ -170,8 +173,10 @@ class HostStatusApiTest(unittest.TestCase):
             run=_run,
             probe=lambda port: 0.5 if port in (8888, 8080) else None,
         )
+        box = {"internal_available": True, "reason": ""}
         try:
-            with mock.patch("backend.server.collect_host_status", return_value=sample):
+            with mock.patch("backend.server.collect_host_status", return_value=sample), \
+                    mock.patch("backend.server.mode_status", return_value=box):
                 conn = HTTPConnection("127.0.0.1", port, timeout=5)
                 conn.request("GET", "/api/host-status")
                 resp = conn.getresponse()
@@ -191,6 +196,14 @@ class HostStatusApiTest(unittest.TestCase):
             forbidden = resp.status
             conn.close()
             self.assertEqual(forbidden, 403)
+
+            # Off the box there is no host page: it says so instead of reading this machine.
+            with mock.patch("backend.server.mode_status", return_value={"internal_available": False, "reason": "not a box"}):
+                conn = HTTPConnection("127.0.0.1", port, timeout=5)
+                conn.request("GET", "/api/host-status")
+                off_box = conn.getresponse().status
+                conn.close()
+            self.assertEqual(off_box, 403)
         finally:
             httpd.shutdown()
             httpd.server_close()

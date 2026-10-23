@@ -33,7 +33,7 @@ from backend.settings import clean  # noqa: E402
 SITE = ROOT / "site"
 STEP_MS = 30 * 1000
 FRAMES = 60
-REPO = "https://github.com/Olivia295/grokbot-teamwork-UI"
+REPO = "https://github.com/Olivia295/grokbot-team-monitor-UI"
 ALERT_RULES = {"error": True, "awaiting": True, "stuck": True, "done": True, "stuckMinutes": 10}
 DAY = 86400 * 1000
 
@@ -98,7 +98,7 @@ def demo_internal(cache, now_ms: int, language: str = "zh") -> dict:
             if entry.get("toAgent"):
                 edges[(row["name"], entry["toAgent"]["name"])] += 1
         record = {
-            "name": row["name"], "label": row.get("title", ""), "group": groups.get(row["id"], ""),
+            "id": row["id"], "name": row["name"], "label": row.get("title", ""), "group": groups.get(row["id"], ""),
             "duty": row.get("description", ""),
             "status": internal_box.status_for(last / 1000 if last else None, now, True),
             "last_activity_ms": last or None,

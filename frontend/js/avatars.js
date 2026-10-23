@@ -318,7 +318,7 @@ function speechHalfWidth(text) {
   return Math.max(20, width / 2);
 }
 
-// The Bot Office mark: a bot head inside an orbit with two teammates riding it.
+// The Bot Monitoring Room mark: a bot head inside an orbit with two teammates riding it.
 // Monochrome on purpose so it sits well next to Grok's black-and-white look.
 function logoSVG(size = 40) {
   return `<svg class="logo" width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true">

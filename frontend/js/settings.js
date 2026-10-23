@@ -71,6 +71,9 @@ async function loadMode() {
 }
 function renderReadMode() {
   const available = Boolean(boxMode?.internal_available);
+  // The services list only means something on a Grok Bot box (the Host tab).
+  for (const node of $$(".box-only")) node.hidden = !available || Boolean(STATIC);
+  if (available) renderServices();
   const internal = $('#readModeSel option[value="internal"]');
   if (internal) internal.disabled = !available;
   $("#read-mode-hint").textContent = available
@@ -145,6 +148,40 @@ function renderHooks() {
       <button type="button" class="icon-btn" data-hook-remove aria-label="${esc(t("set.hookRemove"))}">✕</button>
     </li>`).join("") || `<li class="muted">${t("set.hookNone")}</li>`;
 }
+// ---------------------------------------------------------------- services (Host tab on the box)
+
+function serviceRow(item = {}) {
+  return `<li data-service>
+      <input type="text" data-service-field="name" value="${esc(item.name || "")}" placeholder="${esc(t("set.serviceName"))}" aria-label="${esc(t("set.serviceName"))}" maxlength="40">
+      <input type="number" data-service-field="port" value="${esc(item.port ?? "")}" placeholder="8888" aria-label="${esc(t("set.servicePort"))}" min="1" max="65535" inputmode="numeric">
+      <button type="button" class="icon-btn" data-service-remove aria-label="${esc(t("set.hookRemove"))}">✕</button>
+    </li>`;
+}
+function renderServices() {
+  const items = S.settings.services || [];
+  $("#service-list").innerHTML = items.length ? items.map(serviceRow).join("") : `<li class="muted">${esc(t("set.servicesAuto"))}</li>`;
+}
+async function saveServices() {
+  const services = $$("#service-list [data-service]").map((row) => ({
+    name: row.querySelector('[data-service-field="name"]').value.trim(),
+    port: Number(row.querySelector('[data-service-field="port"]').value),
+  })).filter((item) => item.name && Number.isInteger(item.port) && item.port >= 1 && item.port <= 65535);
+  await save({ services });
+}
+$("#service-add")?.addEventListener("click", () => {
+  const list = $("#service-list");
+  if (list.querySelector(".muted")) list.innerHTML = "";
+  list.insertAdjacentHTML("beforeend", serviceRow());
+  list.lastElementChild.querySelector("input").focus();
+});
+$("#service-list")?.addEventListener("change", saveServices);
+$("#service-list")?.addEventListener("click", async (event) => {
+  if (!event.target.closest("[data-service-remove]")) return;
+  event.target.closest("[data-service]").remove();
+  await saveServices();
+  if (!$("#service-list [data-service]")) renderServices();
+});
+
 let draftHook = null;
 $("#hook-add").addEventListener("click", () => {
   draftHook = { kind: "slack", url: "", enabled: true };

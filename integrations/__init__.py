@@ -1,1 +1,1 @@
-"""Drop-in clients for sending agent activity to Bot Office."""
+"""Drop-in clients for sending agent activity to Bot Monitoring Room."""

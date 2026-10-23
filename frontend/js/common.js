@@ -41,7 +41,7 @@ function cut(text, n) {
 
 const DEFAULT_SETTINGS = {
   language: "auto", theme: "auto", hours: 24, ambient: true, motion: "full", privacy: false, refreshSeconds: 3,
-  dataSource: "auto", supportDir: "", eventsPath: "", tvSeconds: 20, rooms: {}, bots: {},
+  dataSource: "auto", supportDir: "", eventsPath: "", tvSeconds: 20, rooms: {}, bots: {}, services: [],
   alerts: { enabled: false, desktop: true, error: true, awaiting: true, stuck: true, done: false, stuckMinutes: 10, cooldownMinutes: 15, quiet: false, quietFrom: 23, quietTo: 8, webhooks: [] },
 };
 async function getJson(url) {

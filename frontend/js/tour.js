@@ -1,19 +1,21 @@
 // Guided tour: one spotlight at a time over the real page, with Back / Next / Skip.
 // The online demo starts it on a first visit; everywhere else it only opens from the ? button.
 
-const TOUR_KEY = "bot-office.tour";
+const TOUR_KEY = "bot-monitor.tour";
+// A step with a tab opens that tab under the studio before pointing at something in it.
 const TOUR_STEPS = [
   { target: "#connection", key: "mode" },
-  { target: ".hero", key: "hero" },
+  { target: ".strip", key: "hero" },
   { target: ".stage", key: "stage" },
   { target: "#side-list", key: "relays" },
-  { target: "#attention", key: "insights", box: ".insights .insight" },
-  { target: "#bottleneck-card", key: "neck" },
+  { target: "#page-tabs", key: "tabs" },
+  { target: "#tab-overview .insight", key: "insights", tab: "overview" },
+  { target: "#bottleneck-card", key: "neck", tab: "collab" },
+  { target: "#internal-panel", key: "box", tab: "team" },
   { target: ".bell-wrap", key: "alerts" },
-  { target: "#internal-panel", key: "box" },
   { target: 'a[href="settings.html"].icon-btn', key: "settings" },
 ];
-const tour = { index: -1, steps: [], last: null };
+const tour = { index: -1, steps: [], last: null, tab: null };
 
 function tourVisible(node) {
   return node && !node.closest("[hidden]") && node.getClientRects().length > 0;
@@ -22,10 +24,19 @@ function tourTarget(step) {
   const node = document.querySelector(step.box || step.target);
   return tourVisible(node) ? node : null;
 }
+// Shown, or only waiting behind its tab.
+function tourAvailable(step) {
+  const node = document.querySelector(step.target);
+  if (!node || (step.tab && typeof tabAvailable === "function" && !tabAvailable(step.tab))) return false;
+  const panel = step.tab ? $(`#tab-${step.tab}`) : null;
+  for (let at = node; at && at !== document.body; at = at.parentElement) if (at.hidden && at !== panel) return false;
+  return true;
+}
 function startTour() {
-  tour.steps = TOUR_STEPS.filter((step) => tourTarget(step));
+  tour.steps = TOUR_STEPS.filter(tourAvailable);
   if (!tour.steps.length) return;
   tour.last = document.activeElement;
+  tour.tab = S.tab;
   if (!$("#tour")) {
     document.body.insertAdjacentHTML("beforeend", `<div class="tour" id="tour" hidden>
       <div class="tour-spot" id="tour-spot"></div>
@@ -65,6 +76,7 @@ function showTourStep(index) {
   $("#tour-back").textContent = t("tour.back");
   $("#tour-back").hidden = index === 0;
   $("#tour-next").textContent = index === tour.steps.length - 1 ? t("tour.done") : t("tour.next");
+  if (step.tab && S.tab !== step.tab) selectTab(step.tab);
   const node = tourTarget(step);
   node?.scrollIntoView({ block: "center", behavior: REDUCED ? "auto" : "smooth" });
   placeTour();
@@ -125,6 +137,7 @@ function endTour() {
   removeEventListener("resize", placeTour);
   removeEventListener("scroll", placeTour, true);
   try { localStorage.setItem(TOUR_KEY, "seen"); } catch { /* private window: it may show again next visit */ }
+  if (tour.tab && S.tab !== tour.tab) selectTab(tour.tab);
   (tour.last && document.contains(tour.last) ? tour.last : $("#tour-btn"))?.focus({ preventScroll: true });
 }
 function tourSeen() {

@@ -1,17 +1,17 @@
 # Event log format
 
-Bot Office reads Grok Bot's local cache out of the box. Any other multi-agent system (CrewAI, LangGraph, the OpenAI Agents SDK, AutoGen, or your own scripts) can show up in the same office by writing **one JSON object per line** to a `.jsonl` file, or by POSTing events to the local server.
+Bot Monitoring Room reads Grok Bot's local cache out of the box. Any other multi-agent system (CrewAI, LangGraph, the OpenAI Agents SDK, AutoGen, or your own scripts) can show up in the same office by writing **one JSON object per line** to a `.jsonl` file, or by POSTing events to the local server.
 
 ```bash
-# Point Bot Office at a file (or a folder of *.jsonl files)
+# Point Bot Monitoring Room at a file (or a folder of *.jsonl files)
 python3 backend/server.py --events ~/agents/runs.jsonl --open
 
 # ...or let your code POST events; they're appended to data/events.jsonl
-curl -X POST http://127.0.0.1:8080/api/events -H 'Content-Type: application/json' \
+curl -X POST http://127.0.0.1:10000/api/events -H 'Content-Type: application/json' \
   -d '{"type":"handoff","from":"planner","to":"coder","text":"Fix the login bug","run":"r42"}'
 ```
 
-You can also pick **Settings → Data source → Event log** and paste the path there. With the source set to **Auto**, Bot Office uses Grok Bot if it finds Grok Bot data, then your event log, and otherwise shows an empty office that says nothing was found.
+You can also pick **Settings → Data source → Event log** and paste the path there. With the source set to **Auto**, Bot Monitoring Room uses Grok Bot if it finds Grok Bot data, then your event log, and otherwise shows an empty office that says nothing was found.
 
 ## Events
 
@@ -44,22 +44,22 @@ That gives you the relay replay, the time each bot took to pick up (planner → 
 
 ## Python helper
 
-[`integrations/bot_office.py`](../integrations/bot_office.py) is one standard-library file. Copy it into your project, or import it from the installed package (`from grokbot_teamwork_ui.integrations.bot_office import BotOffice`):
+[`integrations/bot_monitor.py`](../integrations/bot_monitor.py) is one standard-library file. Copy it into your project, or import it from the installed package (`from grokbot_team_monitor_ui.integrations.bot_monitor import BotMonitor`):
 
 ```python
-from bot_office import BotOffice
+from bot_monitor import BotMonitor
 
-office = BotOffice()                      # POST to http://127.0.0.1:8080
-# office = BotOffice(file="runs.jsonl")   # or append to a file
+office = BotMonitor()                      # POST to http://127.0.0.1:10000
+# office = BotMonitor(file="runs.jsonl")   # or append to a file
 run = office.new_run()
 office.ask("planner", "Write the release notes", run=run)
 office.handoff("planner", "writer", "Draft notes from the changelog", run=run)
 office.reply("planner", "Release notes are live", run=run)
 ```
 
-Calls never raise. If Bot Office isn't running, events are dropped with a single warning.
+Calls never raise. If Bot Monitoring Room isn't running, events are dropped with a single warning.
 
-Try it without writing any code: `python3 examples/simulate_events.py --post --live` plays a small software team into a running Bot Office.
+Try it without writing any code: `python3 examples/simulate_events.py --post --live` plays a small software team into a running Bot Monitoring Room.
 
 ## Recipes
 
@@ -69,9 +69,9 @@ These are sketches of where to hook in. Check them against the version of your f
 
 ```python
 from agents import RunHooks
-from bot_office import BotOffice
+from bot_monitor import BotMonitor
 
-office = BotOffice()
+office = BotMonitor()
 
 class OfficeHooks(RunHooks):
     def __init__(self, run_id):
@@ -79,13 +79,13 @@ class OfficeHooks(RunHooks):
     async def on_handoff(self, context, from_agent, to_agent):
         office.handoff(from_agent.name, to_agent.name, run=self.run_id)
 
-# await Runner.run(triage_agent, question, hooks=OfficeHooks(BotOffice.new_run()))
+# await Runner.run(triage_agent, question, hooks=OfficeHooks(BotMonitor.new_run()))
 ```
 
 **LangGraph**: each node update in a stream is a step. Hand off from the previous node to the next.
 
 ```python
-run, previous = BotOffice.new_run(), None
+run, previous = BotMonitor.new_run(), None
 office.ask("supervisor", question, run=run)
 for update in graph.stream(inputs, stream_mode="updates"):
     for node in update:
@@ -98,7 +98,7 @@ office.reply(previous or "supervisor", "done", run=run)
 **CrewAI**: `task_callback` fires as each task finishes. Hand off to the agent of the next task.
 
 ```python
-run, last = BotOffice.new_run(), None
+run, last = BotMonitor.new_run(), None
 def on_task(output):
     global last
     agent = str(output.agent)
@@ -116,6 +116,6 @@ fs.appendFileSync("runs.jsonl", JSON.stringify({ type: "handoff", from: "a", to:
 
 ## Notes
 
-- Bot Office reads only the last 20 MB of each file (64 files at most per folder), so long-running logs stay fast.
-- The ingest endpoint only listens on 127.0.0.1. It accepts requests from local scripts (no `Origin` header) and from the Bot Office page itself, never from other websites.
+- Bot Monitoring Room reads only the last 20 MB of each file (64 files at most per folder), so long-running logs stay fast.
+- The ingest endpoint only listens on 127.0.0.1. It accepts requests from local scripts (no `Origin` header) and from the Bot Monitoring Room page itself, never from other websites.
 - Privacy mode, aliases, hidden bots, custom looks and alerts work the same way as for Grok Bot data.

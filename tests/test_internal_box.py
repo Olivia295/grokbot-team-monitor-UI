@@ -191,10 +191,10 @@ class ModeTest(EnvCase):
     def test_env_override_one_forces_available(self):
         os.environ["BOT_OFFICE_INTERNAL"] = "1"
         missing = make_config(
-            "/tmp/bot-office-does-not-exist",
-            roster="/tmp/bot-office-does-not-exist/roster.md",
-            agent_data="/tmp/bot-office-does-not-exist/agent-data",
-            home="/tmp/bot-office-does-not-exist/home",
+            "/tmp/bot-monitor-does-not-exist",
+            roster="/tmp/bot-monitor-does-not-exist/roster.md",
+            agent_data="/tmp/bot-monitor-does-not-exist/agent-data",
+            home="/tmp/bot-monitor-does-not-exist/home",
         )
         status = mode_status(missing)
         self.assertTrue(status["internal_available"])
@@ -488,9 +488,11 @@ class UiContractTest(unittest.TestCase):
         self.assertIn('"/api/mode"', server)
         self.assertIn('"/api/internal"', server)
         self.assertIn('"/api/host-status"', server)
-        self.assertIn("grok-bot status", i18n)
-        self.assertLess(html.find('id="internal-panel"'), html.find('class="hero"'))
-        self.assertLess(html.find('id="host-status"'), html.find('id="internal-body"'))
+        self.assertIn("\"tab.host\": \"本机\"", i18n)
+        # Studio first; the box's bot table lives in the Team tab, host facts in the Host tab.
+        self.assertLess(html.find('class="layout"'), html.find('id="tab-team"'))
+        self.assertLess(html.find('id="tab-team"'), html.find('id="internal-body"'))
+        self.assertLess(html.find('id="tab-host"'), html.find('id="host-status"'))
 
 
 if __name__ == "__main__":

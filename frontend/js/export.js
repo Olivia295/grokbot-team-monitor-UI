@@ -567,7 +567,7 @@ async function exportRelayGIF(flow) {
   openExport(t("replay.gif"));
   try {
     const blob = await relayGIF(flow, (share) => ($("#export-status").textContent = t("export.progress", { n: Math.round(share * 100) })));
-    finishExport(blob, `bot-office-relay-${flow.id}.gif`);
+    finishExport(blob, `bot-monitor-relay-${flow.id}.gif`);
   } catch (error) {
     $("#export-status").textContent = t("export.failed");
     console.error(error);
@@ -577,7 +577,7 @@ async function exportWeekPNG() {
   if (!S.insights) return;
   openExport(t("week.png"));
   try {
-    finishExport(await weekPNG(), `bot-office-week-${stamp()}.png`);
+    finishExport(await weekPNG(), `bot-monitor-week-${stamp()}.png`);
   } catch (error) {
     $("#export-status").textContent = t("export.failed");
     console.error(error);
@@ -585,5 +585,5 @@ async function exportWeekPNG() {
 }
 function exportWeekMarkdown() {
   if (!S.insights) return;
-  download(new Blob([weekMarkdown()], { type: "text/markdown;charset=utf-8" }), `bot-office-week-${stamp()}.md`);
+  download(new Blob([weekMarkdown()], { type: "text/markdown;charset=utf-8" }), `bot-monitor-week-${stamp()}.md`);
 }

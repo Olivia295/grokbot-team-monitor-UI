@@ -26,28 +26,30 @@ function viewSvg() {
 
 // ================================================================= studio
 
-// Rooms flow three to a row; each row grows tall enough for its busiest room,
-// so any number of groups and any number of bots per group still fit.
+// Rooms flow three to a row, all the same width, and each row is only as tall as its fullest
+// room needs: a wall with the room sign, then rows of desks. Every bot keeps its own desk.
 function deskColumns(width) {
   return Math.max(1, Math.min(6, Math.floor((width - 40) / 104)));
 }
 function membersOf(wing) {
   return S.office.agents.filter((agent) => agent.wingId === wing.id);
 }
+const DESK_ROW = 104;
 function studioRooms() {
   const wings = S.office.wings;
   const gap = 18;
   const rooms = [];
   let y = 16;
+  // One width for every row, so a lone room on the last row doesn't stretch across the stage.
+  const count = Math.max(1, Math.min(PER_ROW, wings.length));
+  const w = (ST.W - 40 - gap * (count - 1)) / count;
   for (let start = 0; start < Math.max(wings.length, 1); start += PER_ROW) {
     const row = wings.slice(start, start + PER_ROW);
-    const count = Math.max(row.length, 1);
-    const w = (ST.W - 40 - gap * (count - 1)) / count;
-    const h = Math.max(520, ...row.map((wing) => {
+    const h = Math.max(...row.map((wing) => {
       const n = membersOf(wing).length;
-      const deskRows = Math.ceil(n / Math.min(Math.max(n, 1), deskColumns(w)));
-      return 188 + Math.max(deskRows, 1) * 96 + 200;
-    }));
+      const deskRows = Math.max(1, Math.ceil(n / Math.min(Math.max(n, 1), deskColumns(w))));
+      return 244 + (deskRows - 1) * DESK_ROW;
+    }), 244);
     row.forEach((wing, i) => rooms.push({ wing, index: start + i, x: 20 + i * (w + gap), y, w, h }));
     y += h + 18;
   }
@@ -73,7 +75,7 @@ function studioDesks() {
       const col = i % cols;
       const cell = (room.w - 40) / cols;
       const offset = ((cols - inRow) * cell) / 2;
-      desks.set(agent.id, { x: room.x + 20 + offset + cell * (col + 0.5), y: room.y + 188 + row * 96, room });
+      desks.set(agent.id, { x: room.x + 20 + offset + cell * (col + 0.5), y: room.y + 188 + row * DESK_ROW, room });
     });
   }
   S.office.agents.filter((agent) => agent.wingId === "__door__").forEach((agent, i) => {
@@ -84,20 +86,7 @@ function studioDesks() {
 function studioPositions(base = false) {
   const desks = studioDesks();
   const map = new Map();
-  for (const room of studioRooms()) {
-    const idle = S.office.agents.filter((agent) => agent.wingId === room.wing.id && !isBusy(agent)).sort((a, b) => a.slot - b.slot);
-    const perRow = idle.length > 3 ? Math.ceil(idle.length / Math.ceil(idle.length / Math.max(3, Math.floor(room.w / 80)))) : idle.length;
-    idle.forEach((agent, i) => {
-      const row = Math.floor(i / perRow);
-      const inRow = row ? idle.length - perRow : perRow;
-      const col = i % perRow;
-      const left = room.x + 70 + (row ? 34 : 0);
-      const width = room.w - 110 - (row ? 68 : 0);
-      map.set(agent.id, { x: left + (width * (col + 0.5)) / inRow, y: room.y + room.h - (idle.length > 3 ? 110 - row * 82 : 64), mode: "lounge" });
-    });
-  }
   for (const agent of S.office.agents) {
-    if (map.has(agent.id)) continue;
     const desk = desks.get(agent.id);
     map.set(agent.id, { x: desk.x, y: desk.y + 4, mode: desk.room ? "desk" : "frontdesk" });
   }
@@ -142,11 +131,6 @@ function deskArt(id, desk) {
     <rect x="${x - 35}" y="${y - 28}" width="11" height="12" rx="3" fill="#fff" ${OUT} stroke-width="1.6"/><path d="M${x - 24} ${y - 24}c4 0 4 6 0 6" fill="none" ${OUT} stroke-width="1.6"/>
   </g>`;
 }
-function rug(cx, cy, w, h, color) {
-  return `<rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" rx="${h / 2}" fill="${color}" ${OUT} stroke-width="1.8"/>
-    <rect x="${cx - w / 2 + 9}" y="${cy - h / 2 + 8}" width="${w - 18}" height="${h - 16}" rx="${(h - 16) / 2}" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="2.2" stroke-dasharray="6 6"/>`;
-}
-
 function buildStudio() {
   const svg = $("#studio");
   const rooms = studioRooms();
@@ -169,9 +153,7 @@ function buildStudio() {
       <g transform="translate(${cx} ${room.y + 80})"><rect x="-46" y="-30" width="92" height="60" rx="8" fill="#fff" ${OUT} stroke-width="2.4"/><rect x="-40" y="-24" width="80" height="48" rx="4" class="window-sky" fill="${sky.sky}"/><g>${sky.body}</g><path d="M0 -24v48M-40 0h80" stroke="#fff" stroke-width="3"/></g>
       ${shelf(room.x + 18, room.y + 60)}
       ${plant(room.x + room.w - 36, room.y + 120, 1)}
-      ${rug(cx, room.y + room.h - 72, room.w * 0.82, 120, soft)}
-      <g transform="translate(${room.x + 30} ${room.y + room.h - 150})"><rect x="-14" y="-22" width="30" height="34" rx="8" fill="${soft}" ${OUT}/><rect x="-16" y="4" width="36" height="14" rx="6" fill="${color}" fill-opacity=".55" ${OUT}/></g>
-      ${plant(room.x + room.w - 26, room.y + room.h - 20, 0.85)}
+      ${plant(room.x + room.w - 24, room.y + room.h - 14, 0.7)}
       <g transform="translate(${room.x + 14} ${room.y + 12})"><rect width="${signW}" height="32" rx="9" fill="${color}" ${OUT}/><rect x="3" y="3" width="${signW - 6}" height="12" rx="6" fill="#fff" opacity=".18"/><text class="room-label" x="12" y="21.5">${esc(cut(roomName(room.wing), 14))}</text><rect x="${signW - 74}" y="6" width="66" height="20" rx="10" fill="#fff" opacity=".92"/><text class="room-count" data-room-count="${esc(room.wing.id)}" x="${signW - 41}" y="20" text-anchor="middle"></text></g>
     </g>`;
   }
@@ -229,8 +211,7 @@ function renderStudio() {
     node.querySelector(".creature").classList.remove("st-idle", "st-writing", "st-researching", "st-executing", "st-syncing", "st-error");
     node.querySelector(".creature").classList.add(`st-${agent ? agent.state : "idle"}`);
     node.querySelector(".creature").classList.toggle("sleepy", Boolean(agent && !isBusy(agent) && Date.now() - agent.lastActivityAt > 2 * 3600e3));
-    // A visiting bot hides its name tag (its speech bubble says who it is), so tags never pile up.
-    node.classList.toggle("away", pos.mode === "lounge");
+    node.classList.toggle("resting", Boolean(agent && !isBusy(agent)));
     node.classList.toggle("hall", pos.mode === "hall");
     node.classList.toggle("faded", Boolean((cast && !cast.has(id)) || (neighbours && !neighbours.has(id))));
     const level = kindOf(id) === "agent" ? levelOf(id) : null;
@@ -243,7 +224,7 @@ function renderStudio() {
     const people = S.office.agents.filter((agent) => agent.wingId === room.wing.id);
     const busy = people.filter(isBusy).length;
     const label = $(`[data-room-count="${CSS.escape(room.wing.id)}"]`, svg);
-    if (label) label.textContent = busy ? t("studio.countBusy", { n: people.length, busy }) : t("studio.count", { n: people.length });
+    if (label) label.textContent = busy ? t("studio.countBusy", { n: people.length, busy }) : t(people.length === 1 ? "studio.countOne" : "studio.count", { n: people.length });
   }
   $("#outside-label", svg)?.setAttribute("opacity", studioGuests().length ? 1 : 0);
   const board1 = $("#board-1", svg);

@@ -345,7 +345,7 @@ class StatusBoardApiTest(unittest.TestCase):
 
 
 class UiContractTest(unittest.TestCase):
-    def test_board_is_wired_at_the_top_of_internal_panel(self):
+    def test_board_is_wired_into_the_overview_tab(self):
         root = Path(__file__).resolve().parents[1]
         html = (root / "frontend" / "index.html").read_text(encoding="utf-8")
         i18n = (root / "frontend" / "js" / "i18n.js").read_text(encoding="utf-8")
@@ -354,7 +354,9 @@ class UiContractTest(unittest.TestCase):
         css = (root / "frontend" / "css" / "app.css").read_text(encoding="utf-8")
         self.assertIn('id="status-board"', html)
         self.assertLess(html.find('id="status-board"'), html.find('id="host-status"'))
-        self.assertLess(html.find('id="internal-panel"'), html.find('class="hero"'))
+        # The studio comes first; the board opens the Overview tab under it.
+        self.assertLess(html.find('class="layout"'), html.find('id="page-tabs"'))
+        self.assertLess(html.find('id="page-tabs"'), html.find('id="status-board"'))
         self.assertIn("api/status-board", script)
         self.assertIn('"/api/status-board"', server)
         self.assertIn("board.ok", i18n)

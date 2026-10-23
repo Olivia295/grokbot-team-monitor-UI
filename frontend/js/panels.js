@@ -27,7 +27,6 @@ function renderHero() {
       : [totals ? number(totals.chars) : "—", t("tile.chars")],
   ];
   $("#tiles").innerHTML = tiles.map(([value, text]) => [found ? value : "—", text]).map(([value, text]) => `<div class="tile"><b>${value}</b><span>${esc(text)}</span></div>`).join("");
-  renderHeroArt();
   const usage = office.usage;
   if (usage) {
     const left = Math.max(0, 100 - usage.percentUsed);
@@ -47,21 +46,6 @@ function renderHero() {
     // The box has no quota data at all; the real numbers only exist in the Grok Bot app's cache.
     $("#fuel").innerHTML = `<h3>${icon("bolt")} ${t("fuel.title")}</h3><p style="grid-column:1/-1">${t(office.source?.box ? "fuel.box" : "fuel.none")}</p>`;
   }
-}
-
-function renderHeroArt() {
-  const office = S.office;
-  if (!office) return;
-  const busy = office.agents.filter(isBusy);
-  const cast = [...busy, ...office.agents.filter((agent) => !isBusy(agent)).sort((a, b) => b.lastActivityAt - a.lastActivityAt)].slice(0, 3);
-  const signature = cast.map((agent) => agent.id + agent.state + JSON.stringify(agent.look)).join();
-  const host = $("#hero-art");
-  if (host.dataset.sig === signature) return;
-  host.dataset.sig = signature;
-  const spots = [[60, 128, 1], [135, 120, 1.15], [210, 128, 1]];
-  host.innerHTML = `<svg viewBox="0 0 270 140"><ellipse cx="135" cy="128" rx="120" ry="12" fill="var(--ink)" opacity=".06"/>
-    ${cast.map((agent, i) => `<g transform="translate(${spots[i][0]} ${spots[i][1]}) scale(${spots[i][2] * 0.95})">${creatureSVG(agent)}</g>`).join("")}</svg>`;
-  cast.forEach((agent, i) => host.querySelectorAll(".creature")[i]?.classList.add(`st-${agent.state}`));
 }
 
 let headlineIndex = 0;

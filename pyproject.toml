@@ -3,9 +3,9 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "grokbot-teamwork-ui"
-version = "0.5.0"
-description = "Bot Office (Bot协作室): watch your Grok Bot team, or any multi-agent system, hand off work in a living office. Local, read-only, zero dependencies."
+name = "grokbot-team-monitor-ui"
+version = "0.6.0"
+description = "Bot Monitoring Room (Bot监控室): watch your Grok Bot team, or any multi-agent system, hand off work in a living office. Local, read-only, zero dependencies."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -21,20 +21,21 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/Olivia295/grokbot-teamwork-UI"
-Demo = "https://olivia295.github.io/grokbot-teamwork-UI/"
-Issues = "https://github.com/Olivia295/grokbot-teamwork-UI/issues"
+Homepage = "https://github.com/Olivia295/grokbot-team-monitor-UI"
+Demo = "https://olivia295.github.io/grokbot-team-monitor-UI/"
+Issues = "https://github.com/Olivia295/grokbot-team-monitor-UI/issues"
 
 [project.scripts]
-bot-office = "grokbot_teamwork_ui.backend.server:main"
-grokbot-teamwork-ui = "grokbot_teamwork_ui.backend.server:main"
+bot-monitor = "grokbot_team_monitor_ui.backend.server:main"
+bot-office = "grokbot_team_monitor_ui.backend.server:main"  # the name before 0.6
+grokbot-team-monitor-ui = "grokbot_team_monitor_ui.backend.server:main"
 
 # The repository root is the package, so a checkout and an install share one layout:
-# grokbot_teamwork_ui/{backend,frontend,integrations}.
+# grokbot_team_monitor_ui/{backend,frontend,integrations}.
 [tool.setuptools]
-package-dir = { "grokbot_teamwork_ui" = "." }
-packages = ["grokbot_teamwork_ui", "grokbot_teamwork_ui.backend", "grokbot_teamwork_ui.integrations"]
+package-dir = { "grokbot_team_monitor_ui" = "." }
+packages = ["grokbot_team_monitor_ui", "grokbot_team_monitor_ui.backend", "grokbot_team_monitor_ui.integrations"]
 include-package-data = false
 
 [tool.setuptools.package-data]
-grokbot_teamwork_ui = ["frontend/*.html", "frontend/*.svg", "frontend/css/*.css", "frontend/js/*.js"]
+grokbot_team_monitor_ui = ["frontend/*.html", "frontend/*.svg", "frontend/css/*.css", "frontend/js/*.js"]

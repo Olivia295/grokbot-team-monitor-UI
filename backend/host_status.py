@@ -15,7 +15,10 @@ import subprocess
 import time
 from pathlib import Path
 
-SERVICES = (("JupyterLab", 8888), ("Bot Office (Dashboard)", 8080), ("MessageHub", 8090), ("Blog", 4000))
+# Watched when Settings → Services is empty, and only if something is listening on the port,
+# so a box without them shows just this app.
+KNOWN_SERVICES = (("JupyterLab", 8888), ("MessageHub", 8090), ("Blog", 4000))
+SELF_NAME = "Bot Monitoring Room"
 DISK_PATH = "/home/box"
 REFRESH_SECONDS = 30
 
@@ -46,11 +49,14 @@ def _read_text(path: str) -> str:
     return Path(path).read_text(encoding="utf-8", errors="replace")
 
 
-def collect(*, generated_at: str | None = None, read_text=None, disk_usage=None, run=None, probe=None) -> dict:
+def collect(*, generated_at: str | None = None, read_text=None, disk_usage=None, run=None, probe=None,
+            services: list[dict] | None = None, own_port: int | None = None) -> dict:
     """Return the facts the old dashboard page showed.
 
     ``read_text``, ``disk_usage``, ``run`` and ``probe`` are injectable so tests
-    never touch the real box, Tailscale, or ``/proc``.
+    never touch the real box, Tailscale, or ``/proc``. ``services`` is the list from
+    Settings ([{"name", "port"}]); empty means the known services that are listening.
+    ``own_port`` adds this app itself at the top.
     """
     read_text = read_text or _read_text
     disk_usage = disk_usage or shutil.disk_usage
@@ -123,8 +129,12 @@ def collect(*, generated_at: str | None = None, read_text=None, disk_usage=None,
         tsinfo, peers = "unavailable", []
 
     listing = run("ss -ltn")
+    configured = [(item["name"], item["port"]) for item in services or []]
+    watch = configured or [(name, port) for name, port in KNOWN_SERVICES if port_up(port, listing)]
+    if own_port and own_port not in {port for _name, port in watch}:
+        watch.insert(0, (SELF_NAME, own_port))
     services = []
-    for name, port in SERVICES:
+    for name, port in watch:
         up = port_up(port, listing)
         latency = probe(port) if up else None
         if latency is not None:

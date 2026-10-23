@@ -28,6 +28,7 @@ WINDOWS = {24, 168, 720}
 LOOK_KEYS = {"shape", "color", "eyes", "mouth", "hat", "item", "outfit"}
 TOKEN = re.compile(r"^[a-z0-9-]{1,24}$")
 MAX_ENTRIES = 500
+MAX_SERVICES = 20
 
 DEFAULTS = {
     "version": 1,
@@ -60,6 +61,8 @@ DEFAULTS = {
     },
     "rooms": {},
     "bots": {},
+    # Local services the box's Host tab watches: [{"name": "JupyterLab", "port": 8888}].
+    "services": [],
 }
 
 
@@ -73,10 +76,13 @@ def data_dir() -> Path:
         return ROOT / "data"
     home = Path.home()
     if sys.platform == "darwin":
-        return home / "Library" / "Application Support" / "Bot Office"
-    if os.name == "nt":
-        return Path(os.environ.get("APPDATA") or home / "AppData" / "Roaming") / "Bot Office"
-    return Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config") / "bot-office"
+        base, new, old = home / "Library" / "Application Support", "Bot Monitoring Room", "Bot Office"
+    elif os.name == "nt":
+        base, new, old = Path(os.environ.get("APPDATA") or home / "AppData" / "Roaming"), "Bot Monitoring Room", "Bot Office"
+    else:
+        base, new, old = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config"), "bot-monitor", "bot-office"
+    # Installs from before the rename keep their settings where they already are.
+    return base / old if (base / old).is_dir() and not (base / new).exists() else base / new
 
 
 def settings_path() -> Path:
@@ -170,6 +176,14 @@ def clean(raw) -> dict:
             entry["order"] = room["order"]
         if entry:
             out["rooms"][room_id] = entry
+
+    services = raw.get("services") if isinstance(raw.get("services"), list) else []
+    for item in services[:MAX_SERVICES]:
+        if not isinstance(item, dict):
+            continue
+        name, port = _text(item.get("name"), 40), item.get("port")
+        if name and isinstance(port, int) and not isinstance(port, bool) and 1 <= port <= 65535:
+            out["services"].append({"name": name, "port": port})
 
     bots = raw.get("bots") if isinstance(raw.get("bots"), dict) else {}
     for bot_id, bot in list(bots.items())[:MAX_ENTRIES]:

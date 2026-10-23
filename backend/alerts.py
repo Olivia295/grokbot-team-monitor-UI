@@ -39,8 +39,8 @@ STRINGS = {
         "stuckBody": "已经等了 {minutes} 分钟",
         "done": "{name} 完成了一次协作",
         "test": "测试提醒",
-        "testBody": "如果你看到这条，Bot协作室的提醒已经接通了。",
-        "open": "打开Bot协作室",
+        "testBody": "如果你看到这条，Bot监控室的提醒已经接通了。",
+        "open": "打开Bot监控室",
     },
     "en": {
         "error": "{name} ran into a problem",
@@ -49,8 +49,8 @@ STRINGS = {
         "stuckBody": "Waiting for {minutes} min",
         "done": "{name} finished a relay",
         "test": "Test alert",
-        "testBody": "If you can see this, Bot Office alerts are working.",
-        "open": "Open Bot Office",
+        "testBody": "If you can see this, Bot Monitoring Room alerts are working.",
+        "open": "Open Bot Monitoring Room",
     },
 }
 
@@ -147,7 +147,7 @@ def notify_desktop(title: str, body: str) -> tuple[bool, str]:
             result = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
                                     capture_output=True, timeout=15)
         elif shutil.which("notify-send"):
-            result = subprocess.run(["notify-send", "--app-name=Bot Office", title, body], capture_output=True, timeout=10)
+            result = subprocess.run(["notify-send", "--app-name=Bot Monitoring Room", title, body], capture_output=True, timeout=10)
         else:
             return False, "no notifier (install notify-send)"
     except (OSError, subprocess.SubprocessError) as error:
@@ -166,7 +166,7 @@ def webhook_request(hook: dict, alert: dict) -> tuple[str, bytes]:
     title, body, link = alert["title"], alert["body"], alert.get("url", "")
     url = hook["url"]
     kind = hook.get("kind", "generic")
-    text = "\n".join(part for part in (f"[Bot Office] {title}", body, link) if part)
+    text = "\n".join(part for part in (f"[Bot Monitoring Room] {title}", body, link) if part)
     if kind == "slack":
         payload = {"text": "\n".join(part for part in (f"*{title}*", body, f"<{link}|{alert['openLabel']}>" if link else "") if part)}
     elif kind == "discord":
@@ -183,7 +183,7 @@ def webhook_request(hook: dict, alert: dict) -> tuple[str, bytes]:
             sign = urllib.parse.quote_plus(_signed(hook["secret"], timestamp, feishu=False))
             url += ("&" if "?" in url else "?") + f"timestamp={timestamp}&sign={sign}"
     else:
-        payload = {"source": "bot-office", "kind": alert["kind"], "title": title, "body": body, "bot": alert.get("bot"),
+        payload = {"source": "bot-monitor", "kind": alert["kind"], "title": title, "body": body, "bot": alert.get("bot"),
                    "flowId": alert.get("flowId"), "url": link, "at": alert["at"]}
     return url, json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
@@ -191,7 +191,7 @@ def webhook_request(hook: dict, alert: dict) -> tuple[str, bytes]:
 def post_webhook(hook: dict, alert: dict) -> tuple[bool, str]:
     url, data = webhook_request(hook, alert)
     request = urllib.request.Request(url, data=data, method="POST",
-                                     headers={"Content-Type": "application/json; charset=utf-8", "User-Agent": "BotOffice"})
+                                     headers={"Content-Type": "application/json; charset=utf-8", "User-Agent": "BotMonitor"})
     try:
         with urllib.request.urlopen(request, timeout=8) as response:
             answer = response.read(2000).decode("utf-8", errors="replace")

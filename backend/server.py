@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Bot Office server. Local only: binds to 127.0.0.1 and refuses foreign Host/Origin.
+"""Bot Monitoring Room server. Local only: binds to 127.0.0.1 and refuses foreign Host/Origin.
 
-    python3 backend/server.py                      # http://127.0.0.1:8080
+    python3 backend/server.py                      # http://127.0.0.1:10000
     python3 backend/server.py --demo               # always show the demo team
     python3 backend/server.py --events runs.jsonl  # any multi-agent system, see docs/events.md
     python3 backend/server.py --port 8081 --open
@@ -46,16 +46,16 @@ except ImportError:  # python3 backend/server.py from a checkout
     from backend.views import flows_view, ingest_path, insights_view, office_view, use_box
 
 HOST = "127.0.0.1"
-PORT = 8080
+PORT = 10000
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 COOKIE = "bot_office_token"
 # Optional. When BOT_OFFICE_TOKEN is set, hosts in BOT_OFFICE_ALLOWED_HOSTS also need it
 # (open the page once with ?token=…). Without it, those hosts are let in like before.
 TOKEN = os.environ.get("BOT_OFFICE_TOKEN", "").strip()
 TOKEN_PAGE = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Bot Office</title><body style="font:15px/1.6 -apple-system,sans-serif;max-width:560px;margin:15vh auto;padding:0 20px">
-<h1 style="font-size:20px">Bot Office · Bot协作室</h1>
-<p>This address is not this computer, so Bot Office asks for its access link. Open the link with <code>?token=…</code>
+<title>Bot Monitoring Room</title><body style="font:15px/1.6 -apple-system,sans-serif;max-width:560px;margin:15vh auto;padding:0 20px">
+<h1 style="font-size:20px">Bot Monitoring Room · Bot监控室</h1>
+<p>This address is not this computer, so Bot Monitoring Room asks for its access link. Open the link with <code>?token=…</code>
 that the server printed when it started.</p>
 <p>这个地址不是本机，需要访问链接才能打开。请使用后台启动时打印出来、带 <code>?token=…</code> 的链接。</p></body>"""
 
@@ -63,7 +63,7 @@ that the server printed when it started.</p>
 def allowed_hosts() -> set[str]:
     """Extra host names (besides loopback) the page may be opened from, e.g. the Grok Bot box's proxy."""
     return {name.strip().lower() for name in os.environ.get("BOT_OFFICE_ALLOWED_HOSTS", "").split(",") if name.strip()}
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 WATCHER = AlertWatcher()
 WINDOWS = {24, 168, 720}
 MIME = {
@@ -145,7 +145,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"error": "token required", "tokenRequired": True}, status=401)
                 return
             if not self._local():
-                self._json({"error": "请从本机打开Bot协作室。"}, status=403)
+                self._json({"error": "请从本机打开Bot监控室。"}, status=403)
                 return
             query = parse_qs(url.query, max_num_fields=8)
             settings = load_settings()
@@ -284,9 +284,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._json(payload)
 
+    def _collect_host(self) -> dict:
+        return collect_host_status(services=load_settings().get("services"), own_port=self.server.server_port)
+
     def _host_status(self) -> None:
+        status = mode_status()
+        if not status["internal_available"]:
+            self._json({"error": status["reason"], "internal_available": False}, status=403)
+            return
         try:
-            self._json(collect_host_status())
+            self._json(self._collect_host())
         except (OSError, ValueError):
             self._json({"error": "host status unavailable"}, status=500)
 
@@ -296,7 +303,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": status["reason"], "internal_available": False}, status=403)
             return
         try:
-            self._json(build_status_board())
+            self._json(build_status_board(host_collect=self._collect_host))
         except (BoxError, PrivacyError, OSError, ValueError):
             self._json({"error": "status board unavailable"}, status=500)
 
@@ -321,14 +328,14 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     if sys.version_info < (3, 9):
-        sys.exit("Bot Office needs Python 3.9 or newer.")
-    parser = argparse.ArgumentParser(description="Bot Office — a local office view of your Grok Bot team.")
+        sys.exit("Bot Monitoring Room needs Python 3.9 or newer.")
+    parser = argparse.ArgumentParser(description="Bot Monitoring Room — a local office view of your Grok Bot team.")
     parser.add_argument("--port", type=int, default=int(os.environ.get("GROK_COLLAB_PORT", PORT)), help=f"port to listen on (default {PORT})")
     parser.add_argument("--demo", action="store_true", help="always show the built-in demo team")
     parser.add_argument("--events", metavar="PATH", help="read a JSONL event log (file or folder) instead of Grok Bot, see docs/events.md")
     parser.add_argument("--open", action="store_true", help="open the page in your browser")
     parser.add_argument("--tv", action="store_true", help="with --open, open the big-screen view")
-    parser.add_argument("--version", action="version", version=f"Bot Office {VERSION}")
+    parser.add_argument("--version", action="version", version=f"Bot Monitoring Room {VERSION}")
     args = parser.parse_args()
     if args.demo:
         os.environ["GROK_COLLAB_DEMO"] = "1"
@@ -342,7 +349,7 @@ def main() -> None:
         raise
     url = f"http://{HOST}:{args.port}"
     mode = "  (demo)" if args.demo else f"  (events: {os.environ['GROK_COLLAB_EVENTS']})" if args.events else ""
-    print(f"Bot Office {VERSION}  {url}{mode}", flush=True)
+    print(f"Bot Monitoring Room {VERSION}  {url}{mode}", flush=True)
     print("Press Ctrl+C to stop.", flush=True)
     for name in sorted(allowed_hosts()):
         if TOKEN:

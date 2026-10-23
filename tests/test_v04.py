@@ -152,9 +152,9 @@ class AlertsTest(unittest.TestCase):
         self.assertIn("sign", feishu)
         url, body = webhook_request({"kind": "dingtalk", "url": "https://h/d?access_token=x", "secret": "s"}, alert)
         self.assertIn("&timestamp=", url)
-        self.assertIn("[Bot Office]", json.loads(body)["text"]["content"])
+        self.assertIn("[Bot Monitoring Room]", json.loads(body)["text"]["content"])
         generic = json.loads(webhook_request({"kind": "generic", "url": "https://h/g"}, alert)[1])
-        self.assertEqual(generic["source"], "bot-office")
+        self.assertEqual(generic["source"], "bot-monitor")
 
     def test_settings_reject_unsafe_webhooks(self):
         hooks = clean({"alerts": {"webhooks": [

@@ -31,6 +31,8 @@ function paintSource() {
   }
   pill.dataset.status = status;
   pill.textContent = label;
+  // The box has no quota and no app schedules: that whole column of the Overview goes.
+  document.body.classList.toggle("reading-box", Boolean(source.box) && !STATIC);
   // Quota only exists in the Grok Bot app's cache (and the demo team); hide it everywhere else.
   document.body.classList.toggle("no-fuel", !source.demo && !(source.kind === "grok" && source.found));
   const note = notes.filter(Boolean).join(" ");
@@ -121,7 +123,11 @@ function renderAll() {
   renderBottleneck();
   renderBell();
   renderTV();
-  if (typeof renderInternal === "function") renderInternal();
+  if (typeof renderInternal === "function") {
+    renderInternal();
+    renderStatusBoard();
+    renderHostStatus();
+  }
   if (S.replay) {
     showFlowDetail(S.replay.flow);
     paintReplay();
@@ -398,6 +404,7 @@ addEventListener("resize", () => {
     $(".roster-wrap").before($("#internal-panel"));
   }
   if (typeof initDataMode === "function") await initDataMode();
+  if (typeof syncTabs === "function") syncTabs();
   await refreshOffice();
   const jobs = [refreshFlows(), refreshInsights(), refreshAlerts()];
   if ((S.dataMode === "internal" || STATIC) && typeof refreshInternal === "function") jobs.push(refreshInternal());
