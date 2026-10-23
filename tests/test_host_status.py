@@ -114,6 +114,29 @@ class HostStatusTest(unittest.TestCase):
     def test_known_services_are_the_old_dashboards(self):
         self.assertEqual(KNOWN_SERVICES, (("JupyterLab", 8888), ("MessageHub", 8090), ("Blog", 4000)))
 
+    def test_service_urls_pass_through_and_are_validated(self):
+        from backend.settings import clean
+        cleaned = clean({"services": [
+            {"name": "Jupyter", "port": 8888, "url": "https://grok-bot.tail4e6403.ts.net:8888/lab"},
+            {"name": "Blog", "port": 4000, "url": "javascript:alert(1)"},
+            {"name": "Hub", "port": 8090, "url": "http://x/<script>"},
+        ]})["services"]
+        self.assertEqual(cleaned[0]["url"], "https://grok-bot.tail4e6403.ts.net:8888/lab")
+        self.assertNotIn("url", cleaned[1])
+        self.assertNotIn("url", cleaned[2])
+        data = collect(generated_at="now", read_text=_read_text, disk_usage=_disk, run=_run, probe=lambda _p: None,
+                       services=cleaned, own_port=10000)
+        by_name = {s["name"]: s for s in data["services"]}
+        self.assertEqual(by_name["Jupyter"]["url"], "https://grok-bot.tail4e6403.ts.net:8888/lab")
+        self.assertNotIn("url", by_name["Blog"])
+        self.assertNotIn("url", by_name[SELF_NAME])
+
+    def test_service_names_link_out(self):
+        script = (Path(__file__).resolve().parents[1] / "frontend" / "js" / "internal.js").read_text(encoding="utf-8")
+        self.assertIn("function serviceHref", script)
+        self.assertIn("location.hostname}:${port}/", script)
+        self.assertIn('target="_blank" rel="noopener noreferrer"', script)
+
     def test_settings_list_replaces_the_known_ones(self):
         data = collect(generated_at="now", read_text=_read_text, disk_usage=_disk, run=_run, probe=lambda _p: None,
                        services=[{"name": "Blog", "port": 4000}, {"name": "Jupyter", "port": 8888}], own_port=10000)

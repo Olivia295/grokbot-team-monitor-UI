@@ -701,7 +701,11 @@ body.overlay.tv-neck .layout{display:none}
 .hook-list li{display:grid;grid-template-columns:130px minmax(0,1fr) minmax(0,170px) auto auto;gap:8px;align-items:center}
 .hook-list li.muted{display:block;font-size:13px}
 .hook-list .icon-btn{width:34px;height:34px}
-.service-list li{grid-template-columns:minmax(0,1fr) 120px auto}
+.service-list li{grid-template-columns:minmax(0,1fr) 100px minmax(0,1.4fr) auto}
+.service-link{color:var(--ink);font-weight:600;text-decoration:none}
+.service-link:hover,.service-link:focus-visible{color:var(--accent);text-decoration:underline}
+.service-link span{color:var(--muted);font-weight:400}
+.service-link.down{color:var(--muted)}
 .test-results{list-style:none;margin:10px 0 0;padding:0;font-size:13px;display:grid;gap:4px}
 .test-results .ok{color:#1e9a68}.test-results .bad{color:#c9363c}
 pre.code{margin:6px 0 0;padding:10px 12px;border-radius:12px;background:var(--card-2);border:1px solid var(--line);font:12px/1.5 var(--mono);white-space:pre-wrap;word-break:break-all;max-width:760px}

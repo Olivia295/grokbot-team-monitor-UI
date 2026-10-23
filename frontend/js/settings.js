@@ -154,6 +154,7 @@ function serviceRow(item = {}) {
   return `<li data-service>
       <input type="text" data-service-field="name" value="${esc(item.name || "")}" placeholder="${esc(t("set.serviceName"))}" aria-label="${esc(t("set.serviceName"))}" maxlength="40">
       <input type="number" data-service-field="port" value="${esc(item.port ?? "")}" placeholder="8888" aria-label="${esc(t("set.servicePort"))}" min="1" max="65535" inputmode="numeric">
+      <input type="url" data-service-field="url" value="${esc(item.url || "")}" placeholder="${esc(t("set.serviceUrl"))}" aria-label="${esc(t("set.serviceUrl"))}" spellcheck="false" autocomplete="off">
       <button type="button" class="icon-btn" data-service-remove aria-label="${esc(t("set.hookRemove"))}">✕</button>
     </li>`;
 }
@@ -162,10 +163,15 @@ function renderServices() {
   $("#service-list").innerHTML = items.length ? items.map(serviceRow).join("") : `<li class="muted">${esc(t("set.servicesAuto"))}</li>`;
 }
 async function saveServices() {
-  const services = $$("#service-list [data-service]").map((row) => ({
-    name: row.querySelector('[data-service-field="name"]').value.trim(),
-    port: Number(row.querySelector('[data-service-field="port"]').value),
-  })).filter((item) => item.name && Number.isInteger(item.port) && item.port >= 1 && item.port <= 65535);
+  const services = $$("#service-list [data-service]").map((row) => {
+    const item = {
+      name: row.querySelector('[data-service-field="name"]').value.trim(),
+      port: Number(row.querySelector('[data-service-field="port"]').value),
+    };
+    const url = row.querySelector('[data-service-field="url"]').value.trim();
+    if (/^https?:\/\/\S+$/.test(url)) item.url = url;
+    return item;
+  }).filter((item) => item.name && Number.isInteger(item.port) && item.port >= 1 && item.port <= 65535);
   await save({ services });
 }
 $("#service-add")?.addEventListener("click", () => {

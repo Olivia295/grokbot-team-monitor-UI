@@ -498,7 +498,7 @@ Object.assign(I18N.zh, {
   "aria.pageTabs": "详细信息", "tab.overview": "概览", "tab.team": "成员", "tab.collab": "协作", "tab.host": "本机",
   "internal.col.messages": "7 天消息 发/收", "internal.col.hours": "24 小时活动",
   "internal.messages.title": "近 7 天发出 / 收到的消息条数（消息索引里的真实计数）",
-  "set.services": "本机服务", "set.servicesHint": "「本机」页签里检查哪些服务在线。Bot监控室自己总会列在最前面。",
+  "set.services": "本机服务", "set.servicesHint": "「本机」页签里检查哪些服务在线，点名字就能打开它。Bot监控室自己总会列在最前面。",
   "set.servicesAuto": "没有设置时，自动列出正在运行的常见服务（JupyterLab 8888、MessageHub 8090、Blog 4000）。",
   "set.serviceAdd": "添加服务", "set.serviceName": "名字", "set.servicePort": "端口",
 });
@@ -506,7 +506,7 @@ Object.assign(I18N.en, {
   "aria.pageTabs": "Details", "tab.overview": "Overview", "tab.team": "Team", "tab.collab": "Collaboration", "tab.host": "Host",
   "internal.col.messages": "Messages 7d sent/recv", "internal.col.hours": "Last 24 h",
   "internal.messages.title": "Messages sent / received in the last 7 days (real counts from the message index)",
-  "set.services": "Local services", "set.servicesHint": "Which services the Host tab checks. Bot Monitoring Room itself is always listed first.",
+  "set.services": "Local services", "set.servicesHint": "Which services the Host tab checks; click a name there to open it. Bot Monitoring Room itself is always listed first.",
   "set.servicesAuto": "With none set, common services that are running are listed automatically (JupyterLab 8888, MessageHub 8090, Blog 4000).",
   "set.serviceAdd": "Add a service", "set.serviceName": "Name", "set.servicePort": "Port",
 });
@@ -522,3 +522,5 @@ Object.assign(I18N.en, {
 });
 Object.assign(I18N.zh, { "team.view": "成员视图", "team.cards": "成员卡片", "team.box": "Grok Bot 本机表格（演示）" });
 Object.assign(I18N.en, { "team.view": "Team view", "team.cards": "Team cards", "team.box": "Grok Bot box table (demo)" });
+Object.assign(I18N.zh, { "host.open": "打开 {url}", "set.serviceUrl": "网址（可选，默认用当前地址 + 端口）" });
+Object.assign(I18N.en, { "host.open": "Open {url}", "set.serviceUrl": "URL (optional; default: this address + port)" });

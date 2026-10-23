@@ -129,12 +129,12 @@ def collect(*, generated_at: str | None = None, read_text=None, disk_usage=None,
         tsinfo, peers = "unavailable", []
 
     listing = run("ss -ltn")
-    configured = [(item["name"], item["port"]) for item in services or []]
-    watch = configured or [(name, port) for name, port in KNOWN_SERVICES if port_up(port, listing)]
-    if own_port and own_port not in {port for _name, port in watch}:
-        watch.insert(0, (SELF_NAME, own_port))
+    configured = [(item["name"], item["port"], item.get("url", "")) for item in services or []]
+    watch = configured or [(name, port, "") for name, port in KNOWN_SERVICES if port_up(port, listing)]
+    if own_port and own_port not in {port for _name, port, _url in watch}:
+        watch.insert(0, (SELF_NAME, own_port, ""))
     services = []
-    for name, port in watch:
+    for name, port, url in watch:
         up = port_up(port, listing)
         latency = probe(port) if up else None
         if latency is not None:
@@ -142,7 +142,7 @@ def collect(*, generated_at: str | None = None, read_text=None, disk_usage=None,
                 latency = round(float(latency), 1)
             except (TypeError, ValueError):
                 latency = None
-        services.append({"name": name, "port": port, "up": up, "latency_ms": latency})
+        services.append({"name": name, "port": port, "up": up, "latency_ms": latency, **({"url": url} if url else {})})
 
     return {
         "generated_at": stamp,

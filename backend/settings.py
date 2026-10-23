@@ -183,7 +183,12 @@ def clean(raw) -> dict:
             continue
         name, port = _text(item.get("name"), 40), item.get("port")
         if name and isinstance(port, int) and not isinstance(port, bool) and 1 <= port <= 65535:
-            out["services"].append({"name": name, "port": port})
+            entry = {"name": name, "port": port}
+            # Where the Host tab's link goes; without one it is this page's host with the port.
+            url = _text(item.get("url"), 300)
+            if re.match(r"^https?://[^\s\"'<>]+$", url):
+                entry["url"] = url
+            out["services"].append(entry)
 
     bots = raw.get("bots") if isinstance(raw.get("bots"), dict) else {}
     for bot_id, bot in list(bots.items())[:MAX_ENTRIES]:

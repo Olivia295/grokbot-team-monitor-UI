@@ -227,11 +227,25 @@ function hostFactsCard(data) {
   </article>`;
 }
 
+// Where a service opens: its own URL from Settings, or the host this page was opened on
+// (127.0.0.1, grok-bot, …) with the service's port.
+function serviceHref(svc) {
+  if (svc.url && /^https?:\/\//.test(svc.url)) return svc.url;
+  const port = Number(svc.port);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return "";
+  return `${location.protocol}//${location.hostname}:${port}/`;
+}
 function hostServicesTable(data) {
   const head = ["service", "port", "status", "latency"].map((key) => `<th>${esc(t(`host.col.${key}`))}</th>`).join("");
-  const rows = (data.services || []).map((svc) => (
-    `<tr><td>${esc(svc.name)}</td><td>${esc(svc.port)}</td><td>${esc(svc.up ? t("host.up") : t("host.down"))}</td><td class="num">${svc.latency_ms == null ? "—" : `${esc(svc.latency_ms)} ms`}</td></tr>`
-  )).join("");
+  const rows = (data.services || []).map((svc) => {
+    const href = serviceHref(svc);
+    // This app is the page you're on; every other service opens in a new tab.
+    const self = String(svc.port) === location.port && !svc.url;
+    const name = href && !self
+      ? `<a class="service-link${svc.up ? "" : " down"}" href="${esc(href)}" target="_blank" rel="noopener noreferrer" title="${esc(t("host.open", { url: href }))}">${esc(svc.name)} <span aria-hidden="true">↗</span></a>`
+      : esc(svc.name);
+    return `<tr><td>${name}</td><td>${esc(svc.port)}</td><td>${esc(svc.up ? t("host.up") : t("host.down"))}</td><td class="num">${svc.latency_ms == null ? "—" : `${esc(svc.latency_ms)} ms`}</td></tr>`;
+  }).join("");
   return `<h3>${esc(t("host.services"))}</h3>
     <div class="table-scroll"><table class="internal-table host-table">
       <thead><tr>${head}</tr></thead><tbody>${rows}</tbody>
