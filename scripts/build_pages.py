@@ -102,8 +102,8 @@ def demo_internal(cache, now_ms: int, language: str = "zh") -> dict:
             "duty": row.get("description", ""),
             "status": internal_box.status_for(last / 1000 if last else None, now, True),
             "last_activity_ms": last or None,
-            # The demo team has no folders; outputs stand in for files changed this week.
-            "files_modified_7d": sent,
+            # The demo team has no folders; the relays it touched this week stand in for files changed.
+            "files_modified_7d": len({str(entry.get("requestId", "")).split("-")[0] for entry in recent if entry.get("requestId")}),
             "recent_tasks_ms": _latest_unique(handed, 5),
             "messages_7d": sent, "received_7d": received,
         }

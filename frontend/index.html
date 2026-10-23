@@ -151,6 +151,10 @@
     </section>
 
     <section class="tab-panel" id="tab-team" role="tabpanel" aria-labelledby="tab-btn-team" hidden>
+      <div class="segmented team-view" id="team-view" role="group" data-i18n-aria="team.view" hidden>
+        <button type="button" data-team-view="cards" aria-pressed="true" data-i18n="team.cards"></button>
+        <button type="button" data-team-view="box" aria-pressed="false" data-i18n="team.box"></button>
+      </div>
       <section id="internal-panel" hidden aria-labelledby="internal-title">
         <div class="section-title">
           <h2 id="internal-title" data-i18n="internal.title"></h2>
@@ -179,7 +183,6 @@
             <div class="neck-links" id="neck-links"></div>
           </div>
         </article>
-        <div class="wide" id="box-edges" hidden></div>
         <article class="card insight wide">
           <header><h3><i data-icon="grid"></i><span data-i18n="rhythm.title"></span></h3><span class="muted" data-i18n="rhythm.note"></span></header>
           <div id="rhythm"></div>

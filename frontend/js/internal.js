@@ -2,8 +2,9 @@
 // External mode leaves this hidden. The choice is saved as the readMode setting on the
 // server, so alerts, the big screen and every open page read the same source.
 
-// The online demo shows the panel as a labelled sample, built from the demo team.
-const showsPanel = () => S.dataMode === "internal" || Boolean(STATIC);
+// The online demo shows the panel as a labelled sample, built from the demo team, when the
+// Team tab's switch asks for it; otherwise the team cards. Never both at once.
+const showsPanel = () => S.dataMode === "internal" || Boolean(STATIC && S.teamView === "box");
 const MODE_KEY = "botOffice.dataMode"; // where the first version kept it, per browser (localStorage)
 let internalGen = 0;
 
@@ -127,11 +128,6 @@ function statusClass(status) {
   if (status === "不监控") return "unmonitored";
   return status || "idle";
 }
-function kindLabel(kind) {
-  if (kind === "dispatch") return t("internal.kind.dispatch");
-  if (kind === "mention") return t("internal.kind.mention");
-  return kind || "—";
-}
 function formatGenerated(iso, zone) {
   const match = String(iso || "").match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
   const when = match ? `${match[1]} ${match[2]}` : String(iso || "");
@@ -167,30 +163,6 @@ function openTasks(index) {
   if (!dialog.open) dialog.showModal();
 }
 
-function summaryCard(data) {
-  const summary = data.summary || {};
-  const stats = [
-    ["internal.stat.active", summary.active],
-    ["internal.stat.recent", summary.recent],
-    ["internal.stat.idle", summary.idle],
-    ["internal.stat.nofolder", summary.no_folder],
-    ["internal.stat.unmonitored", summary.unmonitored],
-  ];
-  // Folder-less and unmonitored bots are exceptions: only show them when there are some.
-  const chips = stats.filter(([key, value]) => value || !/nofolder|unmonitored/.test(key)).map(([key, value]) => (
-    `<div class="internal-stat"><b class="num">${esc(value ?? 0)}</b><span>${esc(t(key))}</span></div>`
-  )).join("");
-  const english = S.lang === "en" && summary.text_en;
-  const zhNote = S.lang === "en" && !english ? `<p class="muted">${esc(t("internal.summary.zh"))}</p>` : "";
-  return `<article class="card internal-card">
-    <h3>${esc(t("internal.summary"))}</h3>
-    <div class="internal-stats">${chips}</div>
-    <p class="internal-summary">${esc((english ? summary.text_en : summary.text) || "")}</p>
-    ${zhNote}
-    <p class="muted internal-privacy">${esc(t("internal.privacy"))}</p>
-  </article>`;
-}
-
 function tableCard(data) {
   // The status board's hourly activity joins the box panel's rows by name.
   const hours = new Map((S.statusBoard?.bots || []).map((bot) => [bot.name, bot.hours_24 || []]));
@@ -208,7 +180,7 @@ function tableCard(data) {
     const name = agent
       ? `<button type="button" class="link-btn bot-link" data-profile="${esc(bot.id)}">${esc(bot.name)}</button>`
       : esc(bot.name);
-    const sub = [bot.label, bot.group].filter(Boolean).join(" · ");
+    const sub = [...new Set([bot.label, bot.group].filter(Boolean))].join(" · ");
     const strip = hours.size ? `<td class="col-hours"><div class="sb-hours" aria-hidden="true">${sbHourCells(hours.get(bot.name) || [], 23)}</div></td>` : "";
     return `<tr>
       <td class="name"${bot.duty ? ` title="${esc(bot.duty)}"` : ""}>${name}${sub ? `<span class="sub">${esc(sub)}</span>` : ""}</td>
@@ -220,29 +192,19 @@ function tableCard(data) {
       <td>${tasksCell(bot, index)}</td>
     </tr>`;
   }).join("");
+  const summary = data.summary || {};
+  // Folder-less and unmonitored bots are exceptions: only count them when there are some.
+  const counts2 = [["active", summary.active], ["recent", summary.recent], ["idle", summary.idle],
+    ["nofolder", summary.no_folder], ["unmonitored", summary.unmonitored]]
+    .filter(([key, value]) => value || !["nofolder", "unmonitored"].includes(key))
+    .map(([key, value]) => `<span class="team-count"><span class="st-badge ${esc(key === "nofolder" ? "no-folder" : key)}">${esc(t(`internal.stat.${key}`))}</span> <b class="num">${esc(value ?? 0)}</b></span>`).join("");
   return `<article class="card internal-card">
+    <div class="team-counts">${counts2}</div>
     <div class="table-scroll"><table class="internal-table team-table">
       <thead><tr>${head}</tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
-  </article>`;
-}
-
-function edgesCard(data) {
-  const edges = data.edges || [];
-  const head = ["source", "target", "kind", "weight"]
-    .map((key) => `<th>${esc(t(`internal.edges.${key}`))}</th>`).join("");
-  const rows = edges.length
-    ? edges.map((edge) => (
-      `<tr><td>${esc(edge.source)}</td><td>${esc(edge.target)}</td><td>${esc(kindLabel(edge.kind))}</td><td class="num">${esc(edge.weight)}</td></tr>`
-    )).join("")
-    : `<tr><td colspan="4" class="muted">${esc(t("internal.edges.none"))}</td></tr>`;
-  return `<article class="card internal-card">
-    <h3>${esc(t("internal.edges"))}</h3>
-    <div class="table-scroll edge-scroll"><table class="internal-table">
-      <thead><tr>${head}</tr></thead>
-      <tbody>${rows}</tbody>
-    </table></div>
+    <p class="muted internal-privacy">${esc(t("internal.privacy"))}</p>
   </article>`;
 }
 
@@ -587,14 +549,15 @@ function renderInternal() {
   const panel = $("#internal-panel");
   if (!panel) return;
   panel.hidden = !showsPanel();
-  // Reading a box, the merged table replaces the team cards.
+  // One view of the team at a time: the box table replaces the team cards.
   const roster = $(".roster-wrap");
-  if (roster) roster.hidden = S.dataMode === "internal";
-  if (!showsPanel()) {
-    const edges = $("#box-edges");
-    if (edges) edges.hidden = true;
-    return;
+  if (roster) roster.hidden = showsPanel();
+  const views = $("#team-view");
+  if (views) {
+    views.hidden = !STATIC;
+    for (const button of $$("[data-team-view]", views)) button.setAttribute("aria-pressed", String(button.dataset.teamView === (S.teamView || "cards")));
   }
+  if (!showsPanel()) return;
   $("#internal-title").textContent = t(STATIC ? "internal.titleDemo" : "internal.title");
   const intro = $("#internal-intro");
   if (intro) intro.hidden = !STATIC;
@@ -616,12 +579,7 @@ function renderInternal() {
     return;
   }
   if (stamp) stamp.textContent = formatGenerated(S.internal.generated_at, S.internal.timezone);
-  body.innerHTML = summaryCard(S.internal) + tableCard(S.internal);
-  const edges = $("#box-edges");
-  if (edges) {
-    edges.hidden = false;
-    edges.innerHTML = edgesCard(S.internal);
-  }
+  body.innerHTML = tableCard(S.internal);
 }
 
 async function refreshInternal() {
@@ -672,6 +630,11 @@ async function refreshInternal() {
 
 document.addEventListener("click", (event) => {
   if (event.target.closest("#internal-retry")) refreshInternal();
+  const view = event.target.closest("[data-team-view]");
+  if (view) {
+    S.teamView = view.dataset.teamView;
+    renderInternal();
+  }
   const tasks = event.target.closest("[data-tasks]");
   if (tasks) openTasks(Number(tasks.dataset.tasks));
   if (event.target.closest("#host-retry")) refreshHostStatus();

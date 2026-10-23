@@ -11,7 +11,8 @@ const TOUR_STEPS = [
   { target: "#page-tabs", key: "tabs" },
   { target: "#tab-overview .insight", key: "insights", tab: "overview" },
   { target: "#bottleneck-card", key: "neck", tab: "collab" },
-  { target: "#internal-panel", key: "box", tab: "team" },
+  // The demo keeps the box table behind the Team tab's switch, so point at the switch there.
+  { target: "#internal-panel", demo: "#team-view", key: "box", tab: "team" },
   { target: ".bell-wrap", key: "alerts" },
   { target: 'a[href="settings.html"].icon-btn', key: "settings" },
 ];
@@ -20,13 +21,14 @@ const tour = { index: -1, steps: [], last: null, tab: null };
 function tourVisible(node) {
   return node && !node.closest("[hidden]") && node.getClientRects().length > 0;
 }
+const stepTarget = (step) => (STATIC && step.demo) || step.target;
 function tourTarget(step) {
-  const node = document.querySelector(step.box || step.target);
+  const node = document.querySelector(step.box || stepTarget(step));
   return tourVisible(node) ? node : null;
 }
 // Shown, or only waiting behind its tab.
 function tourAvailable(step) {
-  const node = document.querySelector(step.target);
+  const node = document.querySelector(stepTarget(step));
   if (!node || (step.tab && typeof tabAvailable === "function" && !tabAvailable(step.tab))) return false;
   const panel = step.tab ? $(`#tab-${step.tab}`) : null;
   for (let at = node; at && at !== document.body; at = at.parentElement) if (at.hidden && at !== panel) return false;

@@ -15,7 +15,7 @@ See what every bot is doing, who handed what to whom, where work gets stuck, and
 ![macOS · Windows · Linux](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-0d0d0f.svg)
 ![中文 · English](https://img.shields.io/badge/i18n-%E4%B8%AD%E6%96%87%20%C2%B7%20English-0d0d0f.svg)
 
-[中文](./README.zh-CN.md) · **English**
+**English** · [中文](./README.zh-CN.md)
 
 [Live demo](https://olivia295.github.io/grokbot-team-monitor-UI/) · [What's new](#whats-new-in-060) · [Real data](#real-data-clearly-labelled) · [Quick start](#quick-start) · [Features](#features) · [Any agent system](#any-multi-agent-system) · [Grok Bot box](#inside-the-grok-bot-box) · [Settings](#settings--customization) · [FAQ](#faq)
 
@@ -60,6 +60,7 @@ A new name, and one page built around the studio: what's happening now on top, d
 | 👥 | **One team table on the box** (Team): status, file activity, messages sent / received, a 24-hour activity strip and recent tasks, in one row per bot. Click a name for the profile | Team tab |
 | 🖥 | **Host tab**: uptime, load, memory, disk, local services with response times, and Tailscale devices, read-only | Host tab |
 | 🔧 | **Services you choose**: Settings → Local services lists what the Host tab checks; empty means common services that are running | Settings → Local services |
+| 🧹 | **Nothing shown twice**: the separate who-dispatched-whom table is gone (the Sankey and Partners show it), the box's summary card folds into the team table's header, and on a box the digest drops the numbers the status board already compares with yesterday | Everywhere |
 | 🔌 | **Default port 10000** (was 19200) | `--port` to change |
 
 <details>
@@ -241,8 +242,8 @@ Everything below the studio is in tabs, one at a time. The choice is remembered,
 | Tab | On your computer (external) | On a Grok Bot box (internal) |
 | --- | --- | --- |
 | **Overview** | Needs you, daily digest and weekly report, weekly quota, schedules | Status board (banner, KPIs, hourly chart), needs you, daily digest |
-| **Team** | Team cards and achievements | One table per bot: status, file activity, messages, 24 h strip, recent tasks |
-| **Collaboration** | Bottlenecks and Sankey, team rhythm | Bottlenecks and Sankey, who dispatches whom, team rhythm |
+| **Team** | Team cards and achievements | One table per bot (status, file activity, messages, 24 h strip, recent tasks) and achievements |
+| **Collaboration** | Bottlenecks and Sankey, team rhythm | The same: bottlenecks and Sankey, team rhythm |
 | **Host** | — | Uptime, load, memory, disk, services, Tailscale devices |
 
 - **Needs you**: bots waiting for your reply, unread messages, bots that hit an error, relays running too long.
@@ -305,7 +306,7 @@ Bot Monitoring Room can also run **inside the Grok Bot box** (the machine your b
 | Bots and rooms | `/workspace/roster.md` (names, labels, duties, sidebar groups) | The app's roster and sidebar groups |
 | Handoffs | `search-index.db` messages (read-only) and `dispatch-log.md` | `toAgent` / `fromAgent` in cached transcripts |
 | Coverage | Every bot in the message index, including ones you haven't opened lately | Bots whose transcripts the app has cached |
-| Extra tabs | Status board, one team table (file activity, recent tasks, **real** 7-day message counts, 24 h activity), who dispatches whom, Host | — |
+| Extra tabs | Status board, one team table (file activity, recent tasks, **real** 7-day message counts, 24 h activity), Host | — |
 | Weekly quota | Not available on the box (the panel says so, and the quota card is hidden) | **Real** percentage, plan and reset date |
 | Message text | Short handoff titles only. Your own messages keep only time and recipient | Full text (hide it with privacy mode) |
 

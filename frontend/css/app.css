@@ -658,7 +658,7 @@ body.tv .narration{min-height:80px;font-size:16px}
 body.tv .toasts{width:min(420px,40%)}
 body.tv.tv-neck .layout{display:none}
 body.tv.tv-neck #tab-collab{display:block!important}
-body.tv.tv-neck #tab-collab .insight:not(#bottleneck-card),body.tv.tv-neck #box-edges{display:none!important}
+body.tv.tv-neck #tab-collab .insight:not(#bottleneck-card){display:none!important}
 body.tv.tv-neck .insight-grid{grid-template-columns:1fr}
 body.tv.tv-neck #bottleneck-card{min-height:calc(100vh - 130px);justify-content:center}
 body.tv.tv-neck .neck-kpi b{font-size:28px}
@@ -741,14 +741,8 @@ body.static-demo .local-only{display:none!important}
 .host-facts td:first-child{color:var(--muted);width:38%}
 .internal-card{padding:16px 18px 14px}
 .internal-card h3{font-size:16px;margin-bottom:10px}
-.internal-stats{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
-.internal-stat{min-width:92px;padding:8px 12px;border:1px solid var(--line);border-radius:14px;background:var(--card-2)}
-.internal-stat b{display:block;font-size:20px;line-height:1.1}
-.internal-stat span{color:var(--muted);font-size:12px}
-.internal-summary{margin:0 0 8px}
 .internal-privacy{margin:8px 0 0;font-size:12px}
 .table-scroll{overflow-x:auto}
-.edge-scroll{max-height:520px;overflow:auto}
 .internal-table{width:100%;border-collapse:collapse;min-width:640px}
 .internal-table th,.internal-table td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
 .internal-table th{color:var(--muted);font-size:12px;font-weight:600}
@@ -905,3 +899,10 @@ body.reading-box .ov-stack{display:none}
   .page-tabs button{flex:1;justify-content:center;padding:8px 10px;font-size:13px}
   .page-tabs button i{display:none}
 }
+
+/* Team tab: the box table's own header, and the demo's switch between the two team views */
+.team-counts{display:flex;flex-wrap:wrap;gap:8px 16px;margin:0 0 10px;font-size:13px}
+.team-count b{font-size:15px;margin-left:2px}
+.team-view{justify-self:start}
+/* Reading a box, the status board already compares these numbers with yesterday. */
+body.reading-box .digest-grid{display:none}
