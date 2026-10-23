@@ -125,7 +125,7 @@ class AlertsTest(unittest.TestCase):
 
     def test_watcher_baselines_then_alerts_once(self):
         settings = clean({"dataSource": "demo", "language": "en", "alerts": {"enabled": True}})
-        watcher = AlertWatcher("http://127.0.0.1:19200")
+        watcher = AlertWatcher("http://127.0.0.1:8080")
         sent = []
         self.assertEqual(watcher.scan(settings, NOW, send=lambda alert, config: sent.append(alert)), [])
         # Same conditions again: nothing new.
@@ -143,7 +143,7 @@ class AlertsTest(unittest.TestCase):
         self.assertFalse(in_quiet_hours({**config, "quiet": False}, datetime(2027, 1, 1, 2)))
 
     def test_webhook_payloads(self):
-        alert = {"kind": "error", "title": "Ada ran into a problem", "body": "boom", "url": "http://127.0.0.1:19200",
+        alert = {"kind": "error", "title": "Ada ran into a problem", "body": "boom", "url": "http://127.0.0.1:8080",
                  "openLabel": "Open", "at": NOW, "bot": "a", "flowId": None}
         slack = json.loads(webhook_request({"kind": "slack", "url": "https://h/s"}, alert)[1])
         self.assertIn("*Ada ran into a problem*", slack["text"])

@@ -5,7 +5,7 @@ whatever framework runs your agents:
 
     from bot_office import BotOffice
 
-    office = BotOffice()                         # POSTs to http://127.0.0.1:19200/api/events
+    office = BotOffice()                         # POSTs to http://127.0.0.1:8080/api/events
     # office = BotOffice(file="runs.jsonl")      # or append to a file: bot-office --events runs.jsonl
     office.bot("planner", name="Planner", title="Lead", team="Core")
     run = office.new_run()
@@ -31,7 +31,7 @@ __all__ = ["BotOffice"]
 
 
 class BotOffice:
-    def __init__(self, url: str = "http://127.0.0.1:19200", file: str | Path | None = None, quiet: bool = False):
+    def __init__(self, url: str = "http://127.0.0.1:8080", file: str | Path | None = None, quiet: bool = False):
         self.url = url.rstrip("/") + "/api/events"
         self.file = Path(file).expanduser() if file else None
         self.quiet = quiet

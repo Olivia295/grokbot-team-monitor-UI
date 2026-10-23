@@ -119,7 +119,7 @@ cd grokbot-teamwork-UI
 ./start.sh
 ```
 
-Your browser opens <http://127.0.0.1:19200>.
+Your browser opens <http://127.0.0.1:8080>.
 
 | OS | Easiest way |
 | --- | --- |
@@ -148,7 +148,7 @@ Installed copies keep their settings in your user folder (`~/Library/Application
 ```bash
 bot-office --demo                   # demo team only: screenshots, trying it out, no Grok Bot installed
 bot-office --events runs.jsonl      # read another agent system's event log (see below)
-bot-office --port 8080              # different port
+bot-office --port 8081              # different port
 bot-office --open --tv              # open straight into big-screen mode
 ```
 
@@ -262,7 +262,7 @@ Write one JSON object per line and Bot Office shows it like a Grok team: rooms, 
 ```bash
 bot-office --events runs.jsonl --open
 # or stream into a running office:
-curl -X POST http://127.0.0.1:19200/api/events -H 'Content-Type: application/json' \
+curl -X POST http://127.0.0.1:8080/api/events -H 'Content-Type: application/json' \
   -d '{"type":"handoff","from":"planner","to":"coder","text":"Fix the login bug"}'
 ```
 
@@ -283,13 +283,14 @@ Bot Office can also run **inside the Grok Bot box** (the machine your bots work 
 | Message text | Short handoff titles only. Your own messages keep only time and recipient | Full text (hide it with privacy mode) |
 
 - **When it switches on**: internal reading is used whenever both `/workspace/roster.md` and `/home/box/agent-data` exist. `BOT_OFFICE_INTERNAL=1` forces it on and `=0` forces it off. The page, alerts, the big screen and the menu-bar app all read the same source. Off the box, `/api/internal` answers 403.
+- **Host status**: the internal page starts with the grok-bot status dashboard (uptime, load, memory, disk, listening services and tailnet devices), collected read-only the same way as the old `127.0.0.1:8080` dashboard.
 - **Box panel**: per bot, when its files last changed (*today*, *in 3 days*, *earlier*), files changed in 7 days, recent tasks from its log (click the count to open them), and messages sent and received in the last 7 days. Counts are `COUNT(*)` queries; message bodies are never selected.
 - **What it never reads**: Notion Nexus `inbox` / `snapshots` / `raw`, `~/.codex`, `~/.grok`, `auth.json`, anything with `token` in its name, `*.env`, and files named 周记 / 日记. Willow Mage shows only its name and "not monitored". Handoff titles that look personal are replaced with "(hidden)". The SQLite index is opened read-only (`mode=ro`).
 - **No demo stand-ins**: with no records yet, the box view says "No box collaboration records yet" instead of showing the demo team.
 
 ### Opening the box's office from elsewhere
 
-The server only listens on `127.0.0.1`. If the box exposes it through a proxy or tunnel (for example Tailscale, as `http://grok-bot:19200`), list that host name in `BOT_OFFICE_ALLOWED_HOSTS` (comma-separated), and the page opens there directly.
+The server only listens on `127.0.0.1`. If the box exposes it through a proxy or tunnel (for example Tailscale, as `http://grok-bot:8080`), list that host name in `BOT_OFFICE_ALLOWED_HOSTS` (comma-separated), and the page opens there directly.
 
 Anyone who can reach that address can see the box's data. On your own Tailscale network that's usually just your devices. To lock it down further, set `BOT_OFFICE_TOKEN` to a long random string. Requests through the allowed names then need it once: open the page with `?token=…` and it's kept as a cookie, or have scripts send `Authorization: Bearer <token>`. Opening it from the box itself (or through an SSH tunnel to `127.0.0.1`) never needs a token.
 
@@ -368,6 +369,7 @@ backend/
   grok_cache.py  reads Grok Bot's cache, finds the folder on each OS
   events.py      generic JSONL event adapter + POST /api/events
   internal_box.py  Grok Bot box: roster, bot folders, work status, privacy rules
+  host_status.py   Grok Bot box: uptime, load, memory, disk, services, tailnet
   box_source.py    Grok Bot box: message index + dispatch log → relays
   collab.py      office state, relay reconstruction, bottlenecks
   insights.py    profiles, achievements, activity, digest, rhythm
@@ -423,7 +425,7 @@ That's the age of the data, not of the page. With the Grok Bot app closed, its c
 <details>
 <summary><b>Port already in use</b></summary>
 
-Run `bot-office --port 19201` (or `python3 backend/server.py --port 19201`), or close the copy that is already running.
+Run `bot-office --port 8081` (or `python3 backend/server.py --port 8081`), or close the copy that is already running.
 </details>
 
 <details>

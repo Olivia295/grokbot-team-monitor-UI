@@ -42,6 +42,21 @@
   <main class="page">
     <p class="banner" id="banner" role="status" hidden></p>
 
+    <section id="internal-panel" hidden aria-labelledby="host-title">
+      <div id="status-board" class="status-board" hidden></div>
+      <div class="section-title">
+        <h2 id="host-title" data-i18n="host.title">grok-bot status</h2>
+        <span class="muted" id="host-stamp"></span>
+      </div>
+      <div id="host-status" class="internal-body"></div>
+      <div class="section-title">
+        <h2 id="internal-title" data-i18n="internal.title"></h2>
+        <span class="muted" id="internal-stamp"></span>
+      </div>
+      <p class="muted internal-intro" id="internal-intro" data-i18n="internal.introDemo" hidden></p>
+      <div id="internal-body" class="internal-body"></div>
+    </section>
+
     <section class="hero">
       <div class="card hero-main">
         <div class="hero-art" id="hero-art" aria-hidden="true"></div>
@@ -51,15 +66,6 @@
         <div class="tiles" id="tiles"></div>
       </div>
       <div class="card fuel" id="fuel"></div>
-    </section>
-
-    <section id="internal-panel" hidden aria-labelledby="internal-title">
-      <div class="section-title">
-        <h2 id="internal-title" data-i18n="internal.title"></h2>
-        <span class="muted" id="internal-stamp"></span>
-      </div>
-      <p class="muted internal-intro" id="internal-intro" data-i18n="internal.introDemo" hidden></p>
-      <div id="internal-body" class="internal-body"></div>
     </section>
 
     <section class="awards-wrap" aria-labelledby="awards-title">

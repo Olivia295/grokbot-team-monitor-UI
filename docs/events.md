@@ -7,7 +7,7 @@ Bot Office reads Grok Bot's local cache out of the box. Any other multi-agent sy
 python3 backend/server.py --events ~/agents/runs.jsonl --open
 
 # ...or let your code POST events; they're appended to data/events.jsonl
-curl -X POST http://127.0.0.1:19200/api/events -H 'Content-Type: application/json' \
+curl -X POST http://127.0.0.1:8080/api/events -H 'Content-Type: application/json' \
   -d '{"type":"handoff","from":"planner","to":"coder","text":"Fix the login bug","run":"r42"}'
 ```
 
@@ -49,7 +49,7 @@ That gives you the relay replay, the time each bot took to pick up (planner → 
 ```python
 from bot_office import BotOffice
 
-office = BotOffice()                      # POST to http://127.0.0.1:19200
+office = BotOffice()                      # POST to http://127.0.0.1:8080
 # office = BotOffice(file="runs.jsonl")   # or append to a file
 run = office.new_run()
 office.ask("planner", "Write the release notes", run=run)

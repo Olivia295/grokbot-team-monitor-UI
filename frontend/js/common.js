@@ -18,6 +18,11 @@ const S = {
   internal: null,
   internalError: false,
   internalRequestFailed: false,
+  hostStatus: null,
+  hostRequestFailed: false,
+  statusBoard: null,
+  statusBoardFailed: false,
+  boardWindow: "24h",
 };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -53,6 +58,8 @@ async function postJson(url, body) {
 // Distinguishes "not on this box" (403 + internal_available false) from a broken request.
 async function fetchJson(url) {
   if (STATIC) {
+    // The online demo has no host behind it; the box panel itself comes from demo data.
+    if (url.startsWith("api/host-status") || url.startsWith("api/status-board")) return { ok: false, unavailable: true, data: { internal_available: false, reason: "online demo" } };
     try { return { ok: true, data: await staticJson(url) }; } catch { return { ok: false, failed: true }; }
   }
   let response;
