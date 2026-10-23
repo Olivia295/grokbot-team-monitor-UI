@@ -89,7 +89,8 @@ class HostStatusTest(unittest.TestCase):
             [(s["name"], s["port"], s["up"], s["latency_ms"]) for s in data["services"]],
             [
                 ("JupyterLab", 8888, True, 1.2),
-                ("Dashboard", 8080, True, 1.2),
+                ("Bot Office (Dashboard)", 8080, True, 1.2),
+                ("MessageHub", 8090, False, None),
                 ("Blog", 4000, False, None),
             ],
         )
@@ -114,7 +115,7 @@ class HostStatusTest(unittest.TestCase):
         self.assertFalse(port_up(80, "error: missing"))
 
     def test_services_list_matches_dashboard(self):
-        self.assertEqual(SERVICES, (("JupyterLab", 8888), ("Dashboard", 8080), ("Blog", 4000)))
+        self.assertEqual(SERVICES, (("JupyterLab", 8888), ("Bot Office (Dashboard)", 8080), ("MessageHub", 8090), ("Blog", 4000)))
 
     def test_tcp_latency_open_and_closed_port(self):
         import socket

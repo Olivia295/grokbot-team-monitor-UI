@@ -15,7 +15,7 @@ import subprocess
 import time
 from pathlib import Path
 
-SERVICES = (("JupyterLab", 8888), ("Dashboard", 8080), ("Blog", 4000))
+SERVICES = (("JupyterLab", 8888), ("Bot Office (Dashboard)", 8080), ("MessageHub", 8090), ("Blog", 4000))
 DISK_PATH = "/home/box"
 REFRESH_SECONDS = 30
 
